@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,28 @@ type Props = {
   projectTitle?: string;
   projectType?: ProjectType;
 };
+
+const FIELD_LABELS: Record<string, string> = {
+  first_name: "First name",
+  second_name: "Second / middle name",
+  surname: "Surname",
+  second_surname: "Second surname",
+  birth_date: "Birth date",
+  nationality: "Nationality",
+  document_number: "Document number",
+  document_country: "Issuing country",
+  document_type: "Document type",
+};
+
+function useObjectUrl(file: File | null) {
+  const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
+  return url;
+}
 
 export function StudentForm({
   initial,
@@ -39,6 +61,9 @@ export function StudentForm({
   const [matchOk, setMatchOk] = useState(
     initial?.id_verification_status === "matched",
   );
+
+  const frontPreview = useObjectUrl(frontFile);
+  const backPreview = useObjectUrl(backFile);
 
   const {
     register,
@@ -116,7 +141,11 @@ export function StudentForm({
       if (!student && !frontFile) {
         throw new Error("Please upload the front of your ID");
       }
-      if (data.document_type === "id_card" && !student?.id_back_path && !backFile) {
+      if (
+        data.document_type === "id_card" &&
+        !student?.id_back_path &&
+        !backFile
+      ) {
         throw new Error("Please upload the back of your ID card");
       }
 
@@ -172,6 +201,17 @@ export function StudentForm({
     student?.id_verification_status === "matched" ||
     student?.id_verification_status === "mismatch_dismissed";
 
+  const frontSrc =
+    frontPreview ||
+    (student?.id_front_path
+      ? `/api/students/${student.id}/files/front`
+      : null);
+  const backSrc =
+    backPreview ||
+    (student?.id_back_path
+      ? `/api/students/${student.id}/files/back`
+      : null);
+
   return (
     <div className="space-y-8">
       {projectTitle && (
@@ -181,7 +221,9 @@ export function StudentForm({
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-[var(--navy)]">Personal details</h2>
+          <h2 className="text-lg font-bold text-[var(--navy)]">
+            Personal details
+          </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="First name" error={errors.first_name?.message}>
               <input className="input" {...register("first_name")} />
@@ -206,14 +248,21 @@ export function StudentForm({
             I have a second surname
           </label>
           {hasSecondSurname && (
-            <Field label="Second surname" error={errors.second_surname?.message}>
+            <Field
+              label="Second surname"
+              error={errors.second_surname?.message}
+            >
               <input className="input" {...register("second_surname")} />
             </Field>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Birth date" error={errors.birth_date?.message}>
-              <input type="date" className="input" {...register("birth_date")} />
+              <input
+                type="date"
+                className="input"
+                {...register("birth_date")}
+              />
             </Field>
             <Field label="Nationality" error={errors.nationality?.message}>
               <input className="input" {...register("nationality")} />
@@ -228,7 +277,9 @@ export function StudentForm({
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-[var(--navy)]">Identity document</h2>
+          <h2 className="text-lg font-bold text-[var(--navy)]">
+            Identity document
+          </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Document type" error={errors.document_type?.message}>
               <select className="input" {...register("document_type")}>
@@ -236,7 +287,10 @@ export function StudentForm({
                 <option value="passport">Passport</option>
               </select>
             </Field>
-            <Field label="Document number" error={errors.document_number?.message}>
+            <Field
+              label="Document number"
+              error={errors.document_number?.message}
+            >
               <input className="input" {...register("document_number")} />
             </Field>
             <Field
@@ -279,6 +333,42 @@ export function StudentForm({
               </Field>
             )}
           </div>
+
+          {(frontSrc || backSrc) && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-[var(--navy)]">
+                Check your upload — make sure the photo is clear and readable
+              </p>
+              <div className="grid gap-4">
+                {frontSrc && (
+                  <figure className="space-y-2">
+                    <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                      Front
+                    </figcaption>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={frontSrc}
+                      alt="ID front preview"
+                      className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                    />
+                  </figure>
+                )}
+                {backSrc && (
+                  <figure className="space-y-2">
+                    <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                      Back
+                    </figcaption>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={backSrc}
+                      alt="ID back preview"
+                      className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                    />
+                  </figure>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {error && (
@@ -290,9 +380,7 @@ export function StudentForm({
         <DocumentsToSignPreview
           projectType={projectType}
           birthDate={birthDate}
-          needsTravelDeclaration={
-            student?.needs_travel_declaration ?? false
-          }
+          needsTravelDeclaration={student?.needs_travel_declaration ?? false}
         />
 
         <button
@@ -315,31 +403,75 @@ export function StudentForm({
       )}
 
       {mismatches && mismatches.length > 0 && (
-        <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-950">
-          <p className="font-medium">
-            Some fields do not match what we read on your ID. Please correct them
-            or dismiss if the reading looks wrong.
-          </p>
-          <ul className="list-disc space-y-1 pl-5">
-            {mismatches.map((m) => (
-              <li key={m.field}>
-                <span className="font-medium">{m.field}</span>: you entered “
-                {m.formValue}”, ID shows “{m.idValue}”
-              </li>
-            ))}
+        <div className="space-y-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-5 text-sm text-amber-950">
+          <div>
+            <p className="text-base font-bold text-[var(--navy)]">
+              We found {mismatches.length} difference
+              {mismatches.length === 1 ? "" : "s"} between your form and the ID
+            </p>
+            <p className="mt-1 text-[var(--mint-text)]">
+              Fix the form fields below, or ignore and continue if the ID photo
+              is correct and the automatic reading is wrong.
+            </p>
+          </div>
+
+          <ul className="space-y-3">
+            {mismatches.map((m) => {
+              const label = FIELD_LABELS[m.field] || m.field;
+              return (
+                <li
+                  key={m.field}
+                  className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3"
+                >
+                  <p className="font-semibold text-[var(--navy)]">
+                    Field: {label}
+                  </p>
+                  <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+                    <p>
+                      <span className="text-[var(--muted)]">
+                        You entered:{" "}
+                      </span>
+                      <span className="font-medium">
+                        {m.formValue || "(empty)"}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-[var(--muted)]">
+                        Document says:{" "}
+                      </span>
+                      <span className="font-medium text-amber-900">
+                        {m.idValue || "(not readable)"}
+                      </span>
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
+
           <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
               className="btn-secondary"
-              onClick={() =>
-                document.querySelector<HTMLInputElement>('input[name="first_name"]')?.focus()
-              }
+              onClick={() => {
+                const first = mismatches[0]?.field;
+                const el = first
+                  ? document.querySelector<HTMLInputElement>(
+                      `input[name="${first}"], select[name="${first}"]`,
+                    )
+                  : null;
+                el?.focus();
+                el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
             >
-              Correct data
+              Correct my data
             </button>
-            <button type="button" className="btn-secondary" onClick={dismissMismatch}>
-              Dismiss and continue
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={dismissMismatch}
+            >
+              Ignore and continue anyway
             </button>
           </div>
         </div>
@@ -347,8 +479,8 @@ export function StudentForm({
 
       {student?.id_verification_status === "mismatch_dismissed" && (
         <p className="text-sm text-[var(--muted)]">
-          Mismatch dismissed. You can still sign your documents below; an
-          administrator can review the ID vs your data.
+          You chose to ignore the differences. You can still sign your documents
+          below; an administrator can review the ID vs your data.
         </p>
       )}
 
