@@ -5,6 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { explainApiError } from "@/lib/api-error";
+import {
+  normalizeEmail,
+  normalizeImageFile,
+  normalizePhone,
+  readInputValue,
+  readSelectById,
+} from "@/lib/ios-form";
 import { normalizeDate } from "@/lib/normalize";
 import {
   formatFieldMistake,
@@ -50,8 +57,8 @@ function splitIsoDate(iso: string): { y: string; m: string; d: string } {
   return { y: m[1], m: m[2], d: m[3] };
 }
 
-const YEAR_OPTIONS = Array.from({ length: 80 }, (_, i) =>
-  String(new Date().getFullYear() - 10 - i),
+const YEAR_OPTIONS = Array.from({ length: 100 }, (_, i) =>
+  String(new Date().getFullYear() - i),
 );
 const MONTH_OPTIONS = [
   ["01", "01 — January"],
@@ -152,8 +159,60 @@ export function StudentForm({
   }, [hasSecondSurname, setValue]);
 
   function birthIsoFromSelects() {
+    // Prefer live DOM values — iOS picker UI can lag behind React state
+    const y = readSelectById("birth-date-year") || birthY;
+    const m = readSelectById("birth-date-month") || birthM;
+    const d = readSelectById("birth-date-day") || birthD;
+    if (y && m && d) return `${y}-${m}-${d}`;
     if (birthY && birthM && birthD) return `${birthY}-${birthM}-${birthD}`;
     return "";
+  }
+
+  /** iPhone autofill writes into the DOM without updating React Hook Form. */
+  function syncAllFieldsFromDom(): StudentFormInput {
+    const pick = (name: keyof StudentFormInput) => {
+      const raw = readInputValue(String(name));
+      if (name === "email") return normalizeEmail(raw);
+      if (name === "phone") return normalizePhone(raw);
+      return raw;
+    };
+
+    const y = readSelectById("birth-date-year");
+    const m = readSelectById("birth-date-month");
+    const d = readSelectById("birth-date-day");
+    if (y) setBirthY(y);
+    if (m) setBirthM(m);
+    if (d) setBirthD(d);
+    const iso = y && m && d ? `${y}-${m}-${d}` : "";
+
+    const next: StudentFormInput = {
+      ...getValues(),
+      first_name: pick("first_name") || getValues("first_name"),
+      second_name: pick("second_name") || getValues("second_name"),
+      surname: pick("surname") || getValues("surname"),
+      second_surname: pick("second_surname") || getValues("second_surname"),
+      nationality: pick("nationality") || getValues("nationality"),
+      email: pick("email") || getValues("email"),
+      phone: pick("phone") || getValues("phone"),
+      document_number: pick("document_number") || getValues("document_number"),
+      document_country: pick("document_country") || getValues("document_country"),
+      birth_date: iso || getValues("birth_date"),
+      document_type: (() => {
+        const t = readInputValue("document_type");
+        return t === "id_card" || t === "passport"
+          ? t
+          : getValues("document_type");
+      })(),
+      has_second_name: getValues("has_second_name"),
+      has_second_surname: getValues("has_second_surname"),
+    };
+
+    for (const [key, value] of Object.entries(next)) {
+      setValue(key as keyof StudentFormInput, value as never, {
+        shouldDirty: true,
+      });
+    }
+    return next;
   }
 
   function syncBirthDate() {
@@ -286,11 +345,12 @@ export function StudentForm({
   function collectMistakes(
     valuesOverride?: Partial<StudentFormInput>,
   ): FieldMistake[] {
+    const dom = valuesOverride ?? syncAllFieldsFromDom();
     const values = {
       ...getValues(),
-      ...valuesOverride,
+      ...dom,
       birth_date:
-        valuesOverride?.birth_date ||
+        dom.birth_date ||
         birthIsoFromSelects() ||
         getValues("birth_date"),
     };
@@ -383,8 +443,9 @@ export function StudentForm({
     setFrontError(null);
     setBackError(null);
     setMatchOk(false);
-    const birth_date = birthIsoFromSelects() || data.birth_date;
-    const payload = { ...data, birth_date };
+    const synced = syncAllFieldsFromDom();
+    const birth_date = synced.birth_date || birthIsoFromSelects() || data.birth_date;
+    const payload = { ...data, ...synced, birth_date };
     try {
       const pre = collectMistakes(payload);
       if (pre.length) {
@@ -398,6 +459,15 @@ export function StudentForm({
         return;
       }
 
+      let uploadFront = frontFile;
+      let uploadBack = backFile;
+      try {
+        if (uploadFront) uploadFront = await normalizeImageFile(uploadFront);
+        if (uploadBack) uploadBack = await normalizeImageFile(uploadBack);
+      } catch {
+        /* keep originals */
+      }
+
       const form = new FormData();
       form.set(
         "data",
@@ -405,8 +475,8 @@ export function StudentForm({
           student ? payload : { ...payload, project_id: projectId },
         ),
       );
-      if (frontFile) form.set("id_front", frontFile);
-      if (backFile) form.set("id_back", backFile);
+      if (uploadFront) form.set("id_front", uploadFront);
+      if (uploadBack) form.set("id_back", uploadBack);
 
       const url = student ? `/api/students/${student.id}` : "/api/students";
       const method = student ? "PUT" : "POST";
@@ -610,13 +680,17 @@ export function StudentForm({
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          syncBirthDate();
-          const mistakes = collectMistakes();
+          // Critical on iPhone: autofill is in the DOM, not always in React state
+          const synced = syncAllFieldsFromDom();
+          const mistakes = collectMistakes(synced);
           if (mistakes.length) {
             publishMistakes(mistakes);
             return;
           }
-          void handleSubmit(onSubmit, onInvalid)(e);
+          void handleSubmit(
+            (data) => onSubmit({ ...data, ...synced }),
+            onInvalid,
+          )(e);
         }}
         className="space-y-6"
       >
@@ -812,11 +886,16 @@ export function StudentForm({
               <input
                 id="id-front-input"
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 className="input"
-                onChange={(e) => {
-                  setFrontFile(e.target.files?.[0] ?? null);
+                onChange={async (e) => {
+                  const f = e.target.files?.[0] ?? null;
                   setFrontError(null);
+                  if (!f) {
+                    setFrontFile(null);
+                    return;
+                  }
+                  setFrontFile(await normalizeImageFile(f));
                 }}
               />
             </Field>
@@ -832,11 +911,16 @@ export function StudentForm({
                 <input
                   id="id-back-input"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   className="input"
-                  onChange={(e) => {
-                    setBackFile(e.target.files?.[0] ?? null);
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0] ?? null;
                     setBackError(null);
+                    if (!f) {
+                      setBackFile(null);
+                      return;
+                    }
+                    setBackFile(await normalizeImageFile(f));
                   }}
                 />
               </Field>
