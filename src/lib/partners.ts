@@ -1,7 +1,7 @@
-import { randomId } from "../auth";
-import { createStudentFromForm, listStudents, saveStudent } from "../students";
-import { rpc } from "../supabase";
-import type { StudentFormInput } from "../student-schema";
+import { randomId } from "./auth";
+import { createStudentFromForm, listStudents, saveStudent } from "./students";
+import { rpc } from "./supabase";
+import type { StudentFormInput } from "./student-schema";
 
 export type Partner = {
   id: string;
@@ -160,7 +160,7 @@ export async function ensureSampleDataSeeded() {
 
   // Prefill empty project settings with a sample mobility
   const { getProjectSettings, saveProjectSettings } = await import(
-    "../documents/templates"
+    "./documents/templates"
   );
   const settings = await getProjectSettings();
   let seededSettings = false;
