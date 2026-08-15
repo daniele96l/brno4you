@@ -11,6 +11,7 @@ import {
   partnershipTemplateId,
   projectTypeLabel,
   requiredStudentTemplateIds,
+  signableStudentTemplateIds,
 } from "@/lib/project-packs";
 
 type TemplateItem = {
@@ -67,11 +68,11 @@ export function ProjectDashboard({
 
   const coverage = useMemo(() => {
     return students.map((s) => {
-      const required = requiredStudentTemplateIds(project, s);
-      const generated = required.filter((tid) =>
+      const pack = signableStudentTemplateIds(project, s);
+      const generated = pack.filter((tid) =>
         docs.some((d) => d.student_id === s.id && d.template_id === tid),
       ).length;
-      const signed = required.filter((tid) =>
+      const signed = pack.filter((tid) =>
         docs.some(
           (d) =>
             d.student_id === s.id &&
@@ -83,7 +84,7 @@ export function ProjectDashboard({
         id: s.id,
         generated,
         signed,
-        total: required.length,
+        total: pack.length,
       };
     });
   }, [students, docs, project]);

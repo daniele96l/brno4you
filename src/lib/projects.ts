@@ -19,6 +19,7 @@ export {
   projectTypeLabel,
   projectTypeShort,
   requiredStudentTemplateIds,
+  signableStudentTemplateIds,
 };
 
 export type ProjectInput = {

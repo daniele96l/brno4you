@@ -57,6 +57,20 @@ export function requiredStudentTemplateIds(
   return ids;
 }
 
+/** All docs a participant can sign for this project (admin + participant lists). */
+export function signableStudentTemplateIds(
+  project: Pick<MobilityProject, "type">,
+  student: Pick<Student, "birth_date" | "needs_travel_declaration">,
+): string[] {
+  return Array.from(
+    new Set([
+      ...availableStudentTemplateIds(project),
+      ...requiredStudentTemplateIds(project, student),
+      "travel_tickets_declaration",
+    ]),
+  );
+}
+
 /** Student templates shown in generate UI for this project. */
 export function availableStudentTemplateIds(
   project: Pick<MobilityProject, "type">,
