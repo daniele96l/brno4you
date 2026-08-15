@@ -336,7 +336,11 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
       )}
 
       {student && (
-        <ParticipantDocuments student={student} unlocked={!!verified} />
+        <ParticipantDocuments
+          key={`${student.id}-${student.id_verification_status}-${matchOk}`}
+          student={student}
+          unlocked={!!verified}
+        />
       )}
     </div>
   );

@@ -1,13 +1,29 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
 import { ensureStudentDocuments } from "@/lib/documents/ensure";
-import { getStudent } from "@/lib/students";
-import { getProject, requiredStudentTemplateIds } from "@/lib/projects";
+import { getStudent, listStudentDocuments } from "@/lib/students";
+import {
+  availableStudentTemplateIds,
+  getProject,
+  requiredStudentTemplateIds,
+} from "@/lib/projects";
 import { listDocTemplates } from "@/lib/documents/templates";
+import type { MobilityProject } from "@/lib/project-packs";
+import type { Student } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+function signableIdsFor(project: MobilityProject, student: Student) {
+  return Array.from(
+    new Set([
+      ...availableStudentTemplateIds(project),
+      ...requiredStudentTemplateIds(project, student),
+      "travel_tickets_declaration",
+    ]),
+  );
+}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -19,7 +35,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { listStudentDocuments } = await import("@/lib/students");
   const documents = await listStudentDocuments(id);
   const project = student.project_id
     ? await getProject(student.project_id)
@@ -27,11 +42,15 @@ export async function GET(_req: Request, ctx: Ctx) {
   const required = project
     ? requiredStudentTemplateIds(project, student)
     : [];
+  const signableTemplateIds = project
+    ? signableIdsFor(project, student)
+    : [];
   const templates = await listDocTemplates();
 
   return NextResponse.json({
     documents,
     requiredTemplateIds: required,
+    signableTemplateIds,
     templates: templates.map((t) => ({
       id: t.id,
       label: t.label,
@@ -66,7 +85,16 @@ export async function POST(_req: Request, ctx: Ctx) {
 
   try {
     const documents = await ensureStudentDocuments(student);
-    return NextResponse.json({ documents });
+    const project = await getProject(student.project_id);
+    return NextResponse.json({
+      documents,
+      requiredTemplateIds: project
+        ? requiredStudentTemplateIds(project, student)
+        : [],
+      signableTemplateIds: project
+        ? signableIdsFor(project, student)
+        : [],
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Ensure failed";
     return NextResponse.json({ error: message }, { status: 400 });

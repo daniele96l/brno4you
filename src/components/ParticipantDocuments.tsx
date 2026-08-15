@@ -11,8 +11,10 @@ type Props = {
 };
 
 export function ParticipantDocuments({ student, unlocked }: Props) {
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const [docs, setDocs] = useState<GeneratedDocument[]>([]);
   const [required, setRequired] = useState<string[]>([]);
+  const [signableIds, setSignableIds] = useState<string[]>([]);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     }
     setDocs(json.documents || []);
     setRequired(json.requiredTemplateIds || []);
+    setSignableIds(json.signableTemplateIds || json.requiredTemplateIds || []);
     setTemplates(json.templates || []);
   }, [student.id]);
 
@@ -43,6 +46,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     if (!unlocked) return;
     void (async () => {
       setLoading(true);
+      setError(null);
       const res = await fetch(`/api/students/${student.id}/documents`, {
         method: "POST",
       });
@@ -54,6 +58,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
       }
       setDocs(json.documents || []);
       await load();
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     })();
   }, [unlocked, student.id, load]);
 
@@ -139,8 +144,12 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
 
   if (!unlocked) {
     return (
-      <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-4 text-sm text-[var(--navy)]">
-        Complete ID verification to generate and sign your project documents.
+      <div
+        ref={sectionRef}
+        className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-4 text-sm text-[var(--navy)]"
+      >
+        After you submit and your ID is verified, you will sign each document
+        and declaration here (preview → draw signature → confirm).
       </div>
     );
   }
@@ -149,15 +158,27 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     ? docs.find((d) => d.id === signingId)
     : null;
 
+  const signedRequired = required.filter((tid) => {
+    const d = docFor(tid);
+    return d?.status === "signed";
+  }).length;
+
   return (
-    <div className="space-y-4">
+    <div ref={sectionRef} className="space-y-4 scroll-mt-8">
       <div>
         <h2 className="text-lg font-bold text-[var(--navy)]">
           Documents to sign
         </h2>
         <p className="text-sm text-[var(--mint-text)]">
-          Each document is filled with your application data. Review and sign
-          online.
+          ID verified. Preview each PDF, then click Sign — draw your signature
+          and type your full name.
+          {required.length > 0 && (
+            <>
+              {" "}
+              Progress: {signedRequired}/{required.length} required signed
+              {loading ? " · preparing…" : ""}.
+            </>
+          )}
         </p>
       </div>
 
@@ -168,10 +189,13 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
       )}
 
       <ul className="space-y-3">
-        {required.map((tid) => {
+        {signableIds.map((tid) => {
           const d = docFor(tid);
+          const isRequired = required.includes(tid);
           const status = !d
-            ? "Preparing…"
+            ? loading
+              ? "Preparing…"
+              : "Not ready"
             : d.status === "signed"
               ? "Signed"
               : "Ready to sign";
@@ -183,6 +207,15 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               <div>
                 <div className="font-medium text-[var(--navy)]">
                   {labelFor(tid)}
+                  {isRequired ? (
+                    <span className="ml-2 text-xs font-semibold text-[var(--mint-text)]">
+                      Required
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-xs text-[var(--muted)]">
+                      Optional
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-[var(--mint-text)]">{status}</div>
               </div>
@@ -202,7 +235,12 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
                     type="button"
                     className="btn-primary"
                     disabled={loading}
-                    onClick={() => setSigningId(d.id)}
+                    onClick={() => {
+                      setSignerName(
+                        `${student.first_name} ${student.surname}`.trim(),
+                      );
+                      setSigningId(d.id);
+                    }}
                   >
                     Sign
                   </button>
@@ -211,9 +249,9 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
             </li>
           );
         })}
-        {required.length === 0 && (
+        {signableIds.length === 0 && !loading && (
           <li className="text-sm text-[var(--muted)]">
-            No required documents for this project yet.
+            Preparing your documents…
           </li>
         )}
       </ul>
@@ -224,6 +262,10 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
             <h3 className="text-lg font-bold text-[var(--navy)]">
               Sign: {labelFor(signingDoc.template_id)}
             </h3>
+            <p className="text-sm text-[var(--mint-text)]">
+              Open the PDF, read it, then draw your signature and type your name
+              to confirm.
+            </p>
             <a
               className="btn-secondary inline-flex"
               href={`/api/documents/${signingDoc.id}`}

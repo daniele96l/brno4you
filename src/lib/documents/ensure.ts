@@ -1,24 +1,31 @@
 import { randomId } from "@/lib/auth";
 import { generateFromDbTemplate } from "@/lib/documents/registry";
-import { getProject, requiredStudentTemplateIds } from "@/lib/projects";
 import {
-  listStudentDocuments,
-  saveDocument,
-} from "@/lib/students";
+  availableStudentTemplateIds,
+  getProject,
+  requiredStudentTemplateIds,
+} from "@/lib/projects";
+import { listStudentDocuments, saveDocument } from "@/lib/students";
 import type { GeneratedDocument, Student } from "@/lib/types";
 import { saveUpload } from "@/lib/storage";
 
+/** Generate all project student docs the participant can sign (required + optional). */
 export async function ensureStudentDocuments(
   student: Student,
 ): Promise<GeneratedDocument[]> {
   const project = await getProject(student.project_id);
   if (!project) throw new Error("Project not found");
 
-  const required = requiredStudentTemplateIds(project, student);
+  const toPrepare = new Set([
+    ...availableStudentTemplateIds(project),
+    ...requiredStudentTemplateIds(project, student),
+    "travel_tickets_declaration",
+  ]);
+
   const existing = await listStudentDocuments(student.id);
   const byTemplate = new Map(existing.map((d) => [d.template_id, d]));
 
-  for (const templateId of required) {
+  for (const templateId of toPrepare) {
     const current = byTemplate.get(templateId);
     if (current) continue;
 
