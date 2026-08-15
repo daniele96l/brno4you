@@ -5,6 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import {
+  formatStudentValidationError,
+  STUDENT_FIELD_LABELS,
   studentFormSchema,
   type StudentFormInput,
 } from "@/lib/student-schema";
@@ -12,24 +14,13 @@ import type { FieldMismatch, Student } from "@/lib/types";
 import { ParticipantDocuments } from "@/components/ParticipantDocuments";
 import { DocumentsToSignPreview } from "@/components/DocumentsToSignPreview";
 import type { ProjectType } from "@/lib/project-packs";
+import type { FieldErrors, FieldPath } from "react-hook-form";
 
 type Props = {
   initial?: Student | null;
   projectId?: string;
   projectTitle?: string;
   projectType?: ProjectType;
-};
-
-const FIELD_LABELS: Record<string, string> = {
-  first_name: "First name",
-  second_name: "Second / middle name",
-  surname: "Surname",
-  second_surname: "Second surname",
-  birth_date: "Birth date",
-  nationality: "Nationality",
-  document_number: "Document number",
-  document_country: "Issuing country",
-  document_type: "Document type",
 };
 
 function useObjectUrl(file: File | null) {
@@ -70,6 +61,7 @@ export function StudentForm({
     handleSubmit,
     watch,
     setValue,
+    setError: setFieldError,
     formState: { errors },
   } = useForm<StudentFormInput>({
     resolver: zodResolver(studentFormSchema),
@@ -113,7 +105,13 @@ export function StudentForm({
         body: JSON.stringify({ studentId, force }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Verification failed");
+      if (!res.ok) {
+        throw new Error(
+          typeof json.error === "string"
+            ? json.error
+            : formatStudentValidationError(json.error) || "Verification failed",
+        );
+      }
       if (json.student) setStudent(json.student);
       if (json.status === "matched") {
         setMismatches([]);
@@ -162,11 +160,8 @@ export function StudentForm({
       const res = await fetch(url, { method, body: form });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(
-          typeof json.error === "string"
-            ? json.error
-            : "Could not save your application",
-        );
+        applyServerFieldErrors(json.error);
+        throw new Error(formatStudentValidationError(json.error));
       }
 
       setStudent(json.student);
@@ -179,6 +174,58 @@ export function StudentForm({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function applyServerFieldErrors(error: unknown) {
+    if (!error || typeof error !== "object") return;
+    const fieldErrors = (
+      error as { fieldErrors?: Record<string, string[] | undefined> }
+    ).fieldErrors;
+    if (!fieldErrors) return;
+    for (const [field, msgs] of Object.entries(fieldErrors)) {
+      const message = msgs?.[0];
+      if (!message) continue;
+      setFieldError(field as FieldPath<StudentFormInput>, {
+        type: "server",
+        message,
+      });
+    }
+    const first = Object.keys(fieldErrors)[0];
+    if (first) scrollToField(first);
+  }
+
+  function onInvalid(errs: FieldErrors<StudentFormInput>) {
+    const lines: string[] = [];
+    for (const [field, err] of Object.entries(errs)) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String(err.message || "")
+          : "";
+      if (!message) continue;
+      const label = STUDENT_FIELD_LABELS[field] || field;
+      lines.push(
+        `${label}: ${
+          /match pattern|must match|Invalid string/i.test(message)
+            ? "this value is not in the right format"
+            : message
+        }`,
+      );
+    }
+    setError(
+      lines.length
+        ? `Please fix:\n${lines.join("\n")}`
+        : "Please fix the highlighted fields below",
+    );
+    const first = Object.keys(errs)[0];
+    if (first) scrollToField(first);
+  }
+
+  function scrollToField(field: string) {
+    const el = document.querySelector<HTMLElement>(
+      `input[name="${field}"], select[name="${field}"]`,
+    );
+    el?.focus();
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function dismissMismatch() {
@@ -219,7 +266,7 @@ export function StudentForm({
           Applying for <strong>{projectTitle}</strong>
         </p>
       )}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">
             Personal details
@@ -372,9 +419,9 @@ export function StudentForm({
         </section>
 
         {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="rounded-md bg-red-50 px-3 py-3 text-sm text-red-800 whitespace-pre-line">
             {error}
-          </p>
+          </div>
         )}
 
         <DocumentsToSignPreview
@@ -417,7 +464,7 @@ export function StudentForm({
 
           <ul className="space-y-3">
             {mismatches.map((m) => {
-              const label = FIELD_LABELS[m.field] || m.field;
+              const label = STUDENT_FIELD_LABELS[m.field] || m.field;
               return (
                 <li
                   key={m.field}
@@ -507,8 +554,18 @@ function Field({
   return (
     <label className="block space-y-1.5 text-sm">
       <span className="font-medium text-[var(--navy)]">{label}</span>
-      {children}
-      {error && <span className="block text-xs text-red-600">{error}</span>}
+      <div
+        className={
+          error
+            ? "[&_input]:border-red-500 [&_select]:border-red-500 [&_input]:ring-1 [&_input]:ring-red-400 [&_select]:ring-1 [&_select]:ring-red-400"
+            : undefined
+        }
+      >
+        {children}
+      </div>
+      {error && (
+        <span className="block text-xs font-medium text-red-600">{error}</span>
+      )}
     </label>
   );
 }
