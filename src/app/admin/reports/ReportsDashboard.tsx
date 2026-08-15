@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { explainApiError } from "@/lib/api-error";
 import type { GeneratedDocument, Student } from "@/lib/types";
 import type { Partner } from "@/lib/partners";
 
@@ -125,7 +126,7 @@ export function ReportsDashboard({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(json.error || "Generation failed");
+      setError(explainApiError(json.error, "Could not generate the document"));
       return;
     }
     const created = json.document as GeneratedDocument;
@@ -150,7 +151,9 @@ export function ReportsDashboard({
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(`${s.first_name} ${s.surname}: ${json.error || "failed"}`);
+        setError(
+          `${s.first_name} ${s.surname}: ${explainApiError(json.error, "generation failed")}`,
+        );
         setLoading(false);
         return;
       }

@@ -68,7 +68,7 @@ export function compareStudentToExtracted(
     field: string;
     formValue: string;
     idValue: string | null | undefined;
-    kind?: "text" | "date";
+    kind?: "text" | "date" | "country";
     skip?: boolean;
   }[] = [
     { field: "first_name", formValue: student.first_name, idValue: extracted.first_name },
@@ -100,6 +100,14 @@ export function compareStudentToExtracted(
       field: "nationality",
       formValue: student.nationality,
       idValue: extracted.nationality || extracted.document_country,
+      kind: "country",
+    },
+    {
+      field: "document_country",
+      formValue: student.document_country,
+      idValue: extracted.document_country || extracted.nationality,
+      kind: "country",
+      skip: !student.document_country?.trim(),
     },
   ];
 

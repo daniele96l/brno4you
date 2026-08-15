@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { explainApiError } from "@/lib/api-error";
 import type { DocTemplate } from "@/lib/documents/templates";
 
 export default function AdminTemplatesPage() {
@@ -47,7 +48,7 @@ export default function AdminTemplatesPage() {
     const json = await res.json();
     setSaving(false);
     if (!res.ok) {
-      setError(json.error || "Save failed");
+      setError(explainApiError(json.error, "Could not save the template"));
       return;
     }
     setTemplates((prev) =>

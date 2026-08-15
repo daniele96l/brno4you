@@ -11,10 +11,10 @@ export const studentFormSchema = z
     birth_date: z
       .string()
       .trim()
-      .min(1, "Birth date is required — use the date picker")
+      .min(1, "Birth date is required — use YYYY-MM-DD (e.g. 2005-08-15)")
       .regex(
         /^\d{4}-\d{2}-\d{2}$/,
-        "Birth date is invalid — use the date picker",
+        "Birth date must be YYYY-MM-DD (e.g. 2005-08-15)",
       ),
     nationality: z.string().trim().min(1, "Nationality is required"),
     email: z

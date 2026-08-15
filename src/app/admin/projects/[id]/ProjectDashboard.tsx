@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { explainApiError } from "@/lib/api-error";
 import type { GeneratedDocument, Student } from "@/lib/types";
 import type { Partner } from "@/lib/partners";
 import type { MobilityProject } from "@/lib/project-packs";
@@ -111,7 +112,7 @@ export function ProjectDashboard({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(json.error || "Update failed");
+      setError(explainApiError(json.error, "Could not update travel flag"));
       return;
     }
     setStudents((prev) =>
@@ -131,7 +132,7 @@ export function ProjectDashboard({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(json.error || "Reassign failed");
+      setError(explainApiError(json.error, "Could not reassign participant"));
       return;
     }
     setStudents((prev) => prev.filter((s) => s.id !== student.id));
@@ -156,7 +157,7 @@ export function ProjectDashboard({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(json.error || "Generation failed");
+      setError(explainApiError(json.error, "Could not generate the document"));
       return;
     }
     const created = json.document as GeneratedDocument;
@@ -175,7 +176,7 @@ export function ProjectDashboard({
     const json = await res.json();
     setLoading(false);
     if (!res.ok) {
-      setError(json.error || "Save failed");
+      setError(explainApiError(json.error, "Could not save project settings"));
       return;
     }
     setProject(json.project);

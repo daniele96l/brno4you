@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { explainApiError } from "@/lib/api-error";
 import type { ProjectType } from "@/lib/project-packs";
 
 export function CreateProjectForm() {
@@ -13,21 +14,36 @@ export function CreateProjectForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    const res = await fetch("/api/admin/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(json.error || "Could not create project");
+    if (!name.trim()) {
+      setError("Enter a project name before creating.");
       return;
     }
-    router.push(`/admin/projects/${json.project.id}`);
-    router.refresh();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(
+          explainApiError(json.error, "Could not create the project — try again"),
+        );
+        return;
+      }
+      router.push(`/admin/projects/${json.project.id}`);
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? explainApiError(err.message, "Could not create the project")
+          : "Could not create the project — check your connection",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -54,7 +70,11 @@ export function CreateProjectForm() {
           <option value="training_course">Training Course (TC)</option>
         </select>
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-600 whitespace-pre-line">
+          {error}
+        </p>
+      )}
       <button type="submit" className="btn-primary" disabled={loading}>
         {loading ? "Creating…" : "Create project"}
       </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { explainApiError } from "@/lib/api-error";
 import type { GeneratedDocument, Student } from "@/lib/types";
 
 type TemplateItem = { id: string; label: string };
@@ -27,16 +28,30 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   const drawing = useRef(false);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/students/${student.id}/documents`);
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error || "Could not load documents");
-      return;
+    try {
+      const res = await fetch(`/api/students/${student.id}/documents`);
+      const json = await res.json();
+      if (!res.ok) {
+        setError(
+          explainApiError(
+            json.error,
+            "Could not load your documents — refresh the page",
+          ),
+        );
+        return;
+      }
+      setError(null);
+      setDocs(json.documents || []);
+      setRequired(json.requiredTemplateIds || []);
+      setSignableIds(json.signableTemplateIds || json.requiredTemplateIds || []);
+      setTemplates(json.templates || []);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "Could not load your documents")
+          : "Could not load your documents — check your connection",
+      );
     }
-    setDocs(json.documents || []);
-    setRequired(json.requiredTemplateIds || []);
-    setSignableIds(json.signableTemplateIds || json.requiredTemplateIds || []);
-    setTemplates(json.templates || []);
   }, [student.id]);
 
   useEffect(() => {
@@ -48,20 +63,38 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     void (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/students/${student.id}/documents`, {
-        method: "POST",
-      });
-      const json = await res.json();
-      setLoading(false);
-      if (!res.ok) {
-        setError(json.error || "Could not prepare documents");
-        return;
+      try {
+        const res = await fetch(`/api/students/${student.id}/documents`, {
+          method: "POST",
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(
+            explainApiError(
+              json.error,
+              "Could not prepare documents for signing — try refreshing",
+            ),
+          );
+          setLoading(false);
+          return;
+        }
+        setDocs(json.documents || []);
+        if (json.signableTemplateIds) setSignableIds(json.signableTemplateIds);
+        if (json.requiredTemplateIds) setRequired(json.requiredTemplateIds);
+        await load();
+        sectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? explainApiError(e.message, "Could not prepare documents")
+            : "Could not prepare documents — check your connection",
+        );
+      } finally {
+        setLoading(false);
       }
-      setDocs(json.documents || []);
-      if (json.signableTemplateIds) setSignableIds(json.signableTemplateIds);
-      if (json.requiredTemplateIds) setRequired(json.requiredTemplateIds);
-      await load();
-      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     })();
   }, [unlocked, student.id, load]);
 
@@ -73,7 +106,6 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     return docs.find((d) => d.template_id === templateId);
   }
 
-  // Focus first unsigned document
   useEffect(() => {
     if (!signableIds.length) return;
     const idx = signableIds.findIndex((tid) => {
@@ -145,31 +177,47 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
 
   async function confirmSign() {
     if (!currentDoc || !canvasRef.current) return;
-    setLoading(true);
-    setError(null);
-    const signaturePngBase64 = canvasRef.current.toDataURL("image/png");
-    const res = await fetch(`/api/documents/${currentDoc.id}/sign`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ signerName, signaturePngBase64 }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(json.error || "Sign failed");
+    if (!signerName.trim()) {
+      setError("Type your full name before confirming the signature.");
       return;
     }
-    setSigningOpen(false);
-    await load();
-    // Move to next unsigned
-    const next = signableIds.findIndex((tid, i) => {
-      if (i <= activeIndex) return false;
-      const d = docs.find((x) => x.template_id === tid);
-      // after reload we'll recompute; optimistic: go to next index
-      return !d || d.status !== "signed" || tid !== currentId;
-    });
-    if (next >= 0) setActiveIndex(next);
-    else setActiveIndex(Math.min(activeIndex + 1, signableIds.length - 1));
+    setLoading(true);
+    setError(null);
+    try {
+      const signaturePngBase64 = canvasRef.current.toDataURL("image/png");
+      const res = await fetch(`/api/documents/${currentDoc.id}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signerName, signaturePngBase64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(
+          explainApiError(
+            json.error,
+            "Signing failed — draw your signature, type your name, and try again",
+          ),
+        );
+        return;
+      }
+      setSigningOpen(false);
+      await load();
+      const next = signableIds.findIndex((tid, i) => {
+        if (i <= activeIndex) return false;
+        const d = docs.find((x) => x.template_id === tid);
+        return !d || d.status !== "signed" || tid !== currentId;
+      });
+      if (next >= 0) setActiveIndex(next);
+      else setActiveIndex(Math.min(activeIndex + 1, signableIds.length - 1));
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "Signing failed")
+          : "Signing failed — check your connection",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!unlocked) {
@@ -196,7 +244,10 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
       </div>
 
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 whitespace-pre-line"
+        >
           {error}
         </p>
       )}
@@ -228,6 +279,12 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               uploaded.
             </p>
 
+            {!currentDoc && !loading && (
+              <p className="text-sm text-amber-900">
+                This PDF isn’t ready yet. Wait a moment or refresh the page.
+              </p>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {currentDoc && (
                 <a
@@ -245,6 +302,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
                   className="btn-primary"
                   disabled={loading || !currentDoc}
                   onClick={() => {
+                    setError(null);
                     setSignerName(
                       `${student.first_name} ${student.surname}`.trim(),
                     );
@@ -285,6 +343,13 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
             </div>
           </div>
         )
+      )}
+
+      {!allSigned && !currentId && !loading && (
+        <p role="alert" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          No documents are ready to sign yet. If this stays empty, refresh or
+          contact the organisers.
+        </p>
       )}
 
       <ol className="space-y-2">
@@ -336,6 +401,14 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               Your identity was verified with the ID you uploaded. Draw your
               signature and type your full name.
             </p>
+            {error && (
+              <p
+                role="alert"
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 whitespace-pre-line"
+              >
+                {error}
+              </p>
+            )}
             <a
               className="btn-secondary inline-flex"
               href={`/api/documents/${currentDoc.id}`}

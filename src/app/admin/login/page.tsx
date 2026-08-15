@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { explainApiError } from "@/lib/api-error";
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
@@ -20,14 +21,18 @@ export default function AdminLoginPage() {
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setError(json.error || "Invalid password");
+        setError(explainApiError(json.error, "Wrong password — try again"));
         setLoading(false);
         return;
       }
       // Hard navigation so the session cookie is always sent
       window.location.assign("/admin");
-    } catch {
-      setError("Could not sign in. Try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? explainApiError(err.message, "Could not sign in")
+          : "Could not sign in — check your connection and try again.",
+      );
       setLoading(false);
     }
   }

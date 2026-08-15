@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { explainApiError } from "@/lib/api-error";
 import {
-  formatStudentValidationError,
   STUDENT_FIELD_LABELS,
   studentFormSchema,
   type StudentFormInput,
@@ -107,9 +107,10 @@ export function StudentForm({
       const json = await res.json();
       if (!res.ok) {
         throw new Error(
-          typeof json.error === "string"
-            ? json.error
-            : formatStudentValidationError(json.error) || "Verification failed",
+          explainApiError(
+            json.error,
+            "ID verification failed — check your photos and try again",
+          ),
         );
       }
       if (json.student) setStudent(json.student);
@@ -121,7 +122,11 @@ export function StudentForm({
         setMismatches(json.mismatches || []);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Verification failed");
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "ID verification failed")
+          : "ID verification failed — please try again",
+      );
       setMatchOk(false);
     } finally {
       setVerifying(false);
@@ -161,7 +166,12 @@ export function StudentForm({
       const json = await res.json();
       if (!res.ok) {
         applyServerFieldErrors(json.error);
-        throw new Error(formatStudentValidationError(json.error));
+        throw new Error(
+          explainApiError(
+            json.error,
+            "Could not save your application — check the fields below",
+          ),
+        );
       }
 
       setStudent(json.student);
@@ -170,7 +180,11 @@ export function StudentForm({
       }
       await verify(json.student.id, true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Submit failed");
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "Could not save your application")
+          : "Could not save your application — please try again",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -230,16 +244,32 @@ export function StudentForm({
 
   async function dismissMismatch() {
     if (!student) return;
-    const res = await fetch("/api/verify-id/dismiss", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId: student.id }),
-    });
-    const json = await res.json();
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch("/api/verify-id/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: student.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(
+          explainApiError(
+            json.error,
+            "Could not ignore the differences — try again",
+          ),
+        );
+        return;
+      }
       setStudent(json.student);
       setMismatches(null);
       setMatchOk(true);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "Could not ignore the differences")
+          : "Could not ignore the differences — check your connection",
+      );
     }
   }
 
@@ -266,6 +296,16 @@ export function StudentForm({
           Applying for <strong>{projectTitle}</strong>
         </p>
       )}
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 whitespace-pre-line"
+        >
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">
@@ -304,7 +344,11 @@ export function StudentForm({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Birth date" error={errors.birth_date?.message}>
+            <Field
+              label="Birth date"
+              hint="Format: YYYY-MM-DD (e.g. 2005-08-15)"
+              error={errors.birth_date?.message}
+            >
               <input
                 type="date"
                 className="input"
@@ -418,12 +462,6 @@ export function StudentForm({
           )}
         </section>
 
-        {error && (
-          <div className="rounded-md bg-red-50 px-3 py-3 text-sm text-red-800 whitespace-pre-line">
-            {error}
-          </div>
-        )}
-
         <DocumentsToSignPreview
           projectType={projectType}
           birthDate={birthDate}
@@ -465,6 +503,7 @@ export function StudentForm({
           <ul className="space-y-3">
             {mismatches.map((m) => {
               const label = STUDENT_FIELD_LABELS[m.field] || m.field;
+              const isDate = m.field === "birth_date";
               return (
                 <li
                   key={m.field}
@@ -472,6 +511,7 @@ export function StudentForm({
                 >
                   <p className="font-semibold text-[var(--navy)]">
                     Field: {label}
+                    {isDate ? " (YYYY-MM-DD)" : ""}
                   </p>
                   <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
                     <p>
@@ -491,6 +531,12 @@ export function StudentForm({
                       </span>
                     </p>
                   </div>
+                  {isDate && (
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      Dates must use international format YYYY-MM-DD (e.g.
+                      2005-08-15).
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -544,16 +590,21 @@ export function StudentForm({
 
 function Field({
   label,
+  hint,
   error,
   children,
 }: {
   label: string;
+  hint?: string;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="block space-y-1.5 text-sm">
       <span className="font-medium text-[var(--navy)]">{label}</span>
+      {hint && (
+        <span className="block text-xs text-[var(--mint-text)]">{hint}</span>
+      )}
       <div
         className={
           error

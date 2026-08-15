@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { explainApiError } from "@/lib/api-error";
 
 type TemplateItem = {
   id: string;
@@ -18,18 +19,29 @@ export function GeneralDocsPanel({ templates }: { templates: TemplateItem[] }) {
     setLoadingId(templateId);
     setError(null);
     setLastUrl(null);
-    const res = await fetch("/api/documents/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId, studentId: null }),
-    });
-    const json = await res.json();
-    setLoadingId(null);
-    if (!res.ok) {
-      setError(json.error || "Generation failed");
-      return;
+    try {
+      const res = await fetch("/api/documents/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId, studentId: null }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(
+          explainApiError(json.error, "Could not generate the PDF — try again"),
+        );
+        return;
+      }
+      setLastUrl(`/api/documents/${json.document.id}`);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? explainApiError(e.message, "Could not generate the PDF")
+          : "Could not generate the PDF — check your connection",
+      );
+    } finally {
+      setLoadingId(null);
     }
-    setLastUrl(`/api/documents/${json.document.id}`);
   }
 
   return (
@@ -58,7 +70,11 @@ export function GeneralDocsPanel({ templates }: { templates: TemplateItem[] }) {
           </li>
         ))}
       </ul>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-600 whitespace-pre-line">
+          {error}
+        </p>
+      )}
       {lastUrl && (
         <a className="btn-primary inline-flex" href={lastUrl} target="_blank" rel="noreferrer">
           Download last generated PDF
