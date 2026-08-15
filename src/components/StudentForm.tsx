@@ -217,13 +217,34 @@ export function StudentForm({
           : "";
       if (!message) continue;
       const label = STUDENT_FIELD_LABELS[field] || field;
-      lines.push(
-        `${label}: ${
-          /match pattern|must match|Invalid string/i.test(message)
-            ? "this value is not in the right format"
-            : message
-        }`,
+      const friendly = explainApiError(
+        message,
+        /pattern/i.test(message)
+          ? field === "birth_date"
+            ? "use YYYY-MM-DD (e.g. 2005-08-15)"
+            : "check the format of this field"
+          : message,
       );
+      lines.push(`${label}: ${friendly}`);
+    }
+    // iOS Safari sometimes reports pattern errors with empty RHF errors
+    if (lines.length === 0) {
+      const invalid = document.querySelector<HTMLInputElement>(
+        "form input:invalid, form select:invalid",
+      );
+      if (invalid?.name) {
+        const label = STUDENT_FIELD_LABELS[invalid.name] || invalid.name;
+        lines.push(
+          `${label}: ${
+            invalid.name === "birth_date"
+              ? "use the date picker or type YYYY-MM-DD (e.g. 2005-08-15)"
+              : invalid.name === "email"
+                ? "enter a valid email (e.g. name@example.com)"
+                : "check this field and try again"
+          }`,
+        );
+        scrollToField(invalid.name);
+      }
     }
     setError(
       lines.length
@@ -306,17 +327,29 @@ export function StudentForm({
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+      <form
+        noValidate
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
+        className="space-y-6"
+      >
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">
             Personal details
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="First name" error={errors.first_name?.message}>
-              <input className="input" {...register("first_name")} />
+              <input
+                className="input"
+                autoComplete="given-name"
+                {...register("first_name")}
+              />
             </Field>
             <Field label="Surname" error={errors.surname?.message}>
-              <input className="input" {...register("surname")} />
+              <input
+                className="input"
+                autoComplete="family-name"
+                {...register("surname")}
+              />
             </Field>
           </div>
 
@@ -346,12 +379,14 @@ export function StudentForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Birth date"
-              hint="Format: YYYY-MM-DD (e.g. 2005-08-15)"
+              hint="International format YYYY-MM-DD (e.g. 2005-08-15). Use the date picker or type it."
               error={errors.birth_date?.message}
             >
               <input
                 type="date"
                 className="input"
+                autoComplete="bday"
+                placeholder="YYYY-MM-DD"
                 {...register("birth_date")}
               />
             </Field>
@@ -359,10 +394,23 @@ export function StudentForm({
               <input className="input" {...register("nationality")} />
             </Field>
             <Field label="Email" error={errors.email?.message}>
-              <input type="email" className="input" {...register("email")} />
+              <input
+                type="text"
+                inputMode="email"
+                autoComplete="email"
+                className="input"
+                placeholder="name@example.com"
+                {...register("email")}
+              />
             </Field>
             <Field label="Phone" error={errors.phone?.message}>
-              <input className="input" {...register("phone")} />
+              <input
+                type="text"
+                inputMode="tel"
+                autoComplete="tel"
+                className="input"
+                {...register("phone")}
+              />
             </Field>
           </div>
         </section>

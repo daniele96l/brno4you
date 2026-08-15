@@ -117,8 +117,12 @@ export function formatStudentValidationError(error: unknown): string {
 }
 
 function humanizeZodMessage(message: string): string {
-  if (/match pattern|must match|invalid_format|Invalid string/i.test(message)) {
-    return "This value is not in the right format — check the field highlighted below";
+  if (
+    /did not match the expected pattern|match the expected pattern|match pattern|must match|invalid_format|Invalid string/i.test(
+      message,
+    )
+  ) {
+    return "Wrong format — for birth date use YYYY-MM-DD (e.g. 2005-08-15)";
   }
   return message;
 }
