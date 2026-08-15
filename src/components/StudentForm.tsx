@@ -104,6 +104,7 @@ export function StudentForm({
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorFocusId, setErrorFocusId] = useState<string | null>(null);
   const [student, setStudent] = useState<Student | null>(initial ?? null);
   const [mismatches, setMismatches] = useState<FieldMismatch[] | null>(
     initial?.id_mismatches ?? null,
@@ -289,6 +290,7 @@ export function StudentForm({
       )
     ) {
       setError(explained);
+      setErrorFocusId(null);
       return;
     }
     const scanned = collectMistakes();
@@ -297,6 +299,7 @@ export function StudentForm({
       return;
     }
     setError(fallback);
+    setErrorFocusId(null);
   }
 
   function focusMistake(focusId: string) {
@@ -340,7 +343,17 @@ export function StudentForm({
       }
     }
     setError(mistakes.map((m) => m.message).join("\n\n"));
-    focusMistake(mistakes[0]!.focusId);
+    setErrorFocusId(mistakes[0]?.focusId ?? null);
+  }
+
+  function dismissErrorPopup() {
+    const focusId = errorFocusId;
+    setError(null);
+    setErrorFocusId(null);
+    if (focusId) {
+      // Let the modal close, then scroll to the field
+      requestAnimationFrame(() => focusMistake(focusId));
+    }
   }
 
   /** Find every broken field with entered vs expected — no generic blobs. */
@@ -674,10 +687,34 @@ export function StudentForm({
 
       {error && (
         <div
-          role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 whitespace-pre-line"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+          role="presentation"
+          onClick={dismissErrorPopup}
         >
-          {error}
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="form-error-title"
+            className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="form-error-title"
+              className="text-lg font-bold text-[var(--navy)]"
+            >
+              Please fix
+            </h2>
+            <p className="mt-3 whitespace-pre-line text-sm text-red-900">
+              {error}
+            </p>
+            <button
+              type="button"
+              className="btn-primary mt-5 w-full"
+              onClick={dismissErrorPopup}
+            >
+              OK — show me the field
+            </button>
+          </div>
         </div>
       )}
 
