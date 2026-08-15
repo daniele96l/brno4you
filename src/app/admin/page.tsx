@@ -12,11 +12,11 @@ export default async function AdminPage() {
   const students = await listStudents();
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-3xl">Students</h1>
-          <p className="text-sm text-[var(--muted)]">
+          <h1 className="text-3xl font-extrabold text-[var(--navy)]">Students</h1>
+          <p className="text-sm text-[var(--mint-text)]">
             {students.length} application{students.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -46,7 +46,7 @@ export default async function AdminPage() {
                 <td className="px-4 py-3">
                   <Link
                     href={`/admin/students/${s.id}`}
-                    className="font-medium text-[var(--accent)] hover:underline"
+                    className="font-medium text-[var(--navy)] hover:underline"
                   >
                     {s.first_name} {s.surname}
                   </Link>

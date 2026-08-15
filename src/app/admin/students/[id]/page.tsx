@@ -28,15 +28,15 @@ export default async function AdminStudentPage({ params }: Props) {
     .join(" ");
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <div>
-        <Link href="/admin" className="text-sm text-[var(--accent)] hover:underline">
+        <Link href="/admin" className="text-sm font-medium text-[var(--navy)] hover:underline">
           ← All students
         </Link>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
+        <h1 className="mt-2 text-3xl font-extrabold text-[var(--navy)]">
           {name}
         </h1>
-        <p className="text-sm text-[var(--muted)]">
+        <p className="text-sm text-[var(--mint-text)]">
           Verification: {student.id_verification_status}
         </p>
       </div>

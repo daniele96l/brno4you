@@ -152,7 +152,7 @@ export function StudentForm({ initial }: Props) {
     <div className="space-y-8">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-[var(--ink)]">Personal details</h2>
+          <h2 className="text-lg font-bold text-[var(--navy)]">Personal details</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="First name" error={errors.first_name?.message}>
               <input className="input" {...register("first_name")} />
@@ -199,7 +199,7 @@ export function StudentForm({ initial }: Props) {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-[var(--ink)]">Identity document</h2>
+          <h2 className="text-lg font-bold text-[var(--navy)]">Identity document</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Document type" error={errors.document_type?.message}>
               <select className="input" {...register("document_type")}>
@@ -329,7 +329,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5 text-sm">
-      <span className="font-medium text-[var(--ink)]">{label}</span>
+      <span className="font-medium text-[var(--navy)]">{label}</span>
       {children}
       {error && <span className="block text-xs text-red-600">{error}</span>}
     </label>

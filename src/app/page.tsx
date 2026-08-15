@@ -1,33 +1,94 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <section className="panel relative overflow-hidden px-8 py-16 sm:px-12">
+    <section className="relative mx-auto min-h-[calc(100vh-8rem)] max-w-6xl px-4 py-10 sm:px-6 sm:py-16 lg:py-20">
+      {/* Pastel circle blobs — brand vibe from brnoforyou.cz */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="blob animate-soft-pulse bg-[var(--lavender)]"
         style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231f6f5b' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+          width: "42vw",
+          maxWidth: 520,
+          aspectRatio: "1",
+          top: "-8%",
+          right: "8%",
+          opacity: 0.85,
         }}
       />
-      <div className="relative max-w-xl space-y-5">
-        <p className="text-sm uppercase tracking-[0.2em] text-[var(--accent)]">
-          Erasmus NGO portal
-        </p>
-        <h1 className="font-[family-name:var(--font-display)] text-4xl leading-tight text-[var(--ink)] sm:text-5xl">
-          Brno4You
-        </h1>
-        <p className="text-lg text-[var(--muted)]">
-          Submit your student details and ID so we can prepare your Erasmus
-          paperwork.
-        </p>
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Link href="/apply" className="btn-primary">
-            Start application
+      <div
+        className="blob animate-float bg-[var(--mint)]"
+        style={{
+          width: "28vw",
+          maxWidth: 340,
+          aspectRatio: "1",
+          top: "18%",
+          right: "28%",
+          opacity: 0.75,
+        }}
+      />
+      <div
+        className="blob bg-[var(--sky)]"
+        style={{
+          width: "36vw",
+          maxWidth: 420,
+          aspectRatio: "1",
+          bottom: "-12%",
+          left: "-8%",
+          opacity: 0.9,
+        }}
+      />
+      <div
+        className="blob bg-[var(--lavender)]"
+        style={{
+          width: 180,
+          aspectRatio: "1",
+          bottom: "18%",
+          left: "22%",
+          opacity: 0.45,
+        }}
+      />
+
+      <div className="relative grid items-center gap-12 lg:grid-cols-2 lg:gap-8">
+        <div className="animate-fade-up max-w-xl space-y-6">
+          <h1 className="text-3xl font-extrabold leading-[1.15] tracking-tight text-[var(--navy)] sm:text-4xl lg:text-[2.65rem]">
+            Ready for your Erasmus journey with Brno for you?
+          </h1>
+          <p className="max-w-md text-base leading-relaxed text-[var(--mint-text)] sm:text-lg">
+            Submit your details and ID so we can prepare your paperwork. It only
+            takes a few minutes — we’ll check everything against your document.
+          </p>
+          <div className="flex flex-col items-start gap-4 pt-2 sm:flex-row sm:items-center">
+            <Link href="/apply" className="btn-link-cta group">
+              <span className="cta-icon transition-transform group-hover:translate-x-0.5">
+                ›
+              </span>
+              I&apos;m ready to start my application
+            </Link>
+          </div>
+          <Link
+            href="/admin/login"
+            className="inline-block text-sm font-medium text-[var(--mint-text)] underline-offset-4 hover:text-[var(--navy)] hover:underline"
+          >
+            Administrator login
           </Link>
-          <Link href="/admin/login" className="btn-secondary">
-            Admin login
-          </Link>
+        </div>
+
+        <div className="animate-fade-up-delay relative mx-auto w-full max-w-md lg:max-w-none">
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square w-[115%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--lavender)]"
+            aria-hidden
+          />
+          <div className="relative z-[1] mx-auto aspect-square w-[min(100%,420px)] overflow-hidden rounded-full shadow-[0_25px_60px_rgba(36,58,140,0.18)] ring-8 ring-white">
+            <Image
+              src="/hero-circle.jpg"
+              alt="Young people together outdoors"
+              fill
+              className="object-cover"
+              sizes="420px"
+              priority
+            />
+          </div>
         </div>
       </div>
     </section>
