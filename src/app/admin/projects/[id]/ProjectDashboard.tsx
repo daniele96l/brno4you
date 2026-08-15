@@ -240,7 +240,6 @@ export function ProjectDashboard({
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Generated</th>
                 <th className="px-4 py-3 font-medium">Signed</th>
                 <th className="px-4 py-3 font-medium">Travel declaration</th>
                 <th className="px-4 py-3 font-medium">Move to</th>
@@ -249,7 +248,7 @@ export function ProjectDashboard({
             <tbody>
               {students.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-[var(--muted)]">
+                  <td colSpan={5} className="px-4 py-8 text-[var(--muted)]">
                     No participants yet. Share the invite link.
                   </td>
                 </tr>
@@ -288,10 +287,20 @@ export function ProjectDashboard({
                       </span>
                     </td>
                     <td className="px-4 py-3 tabular-nums">
-                      {c.generated}/{c.total}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums">
-                      {c.signed}/{c.total}
+                      <span
+                        className={
+                          c.signed === c.total && c.total > 0
+                            ? "font-medium text-emerald-800"
+                            : "text-[var(--navy)]"
+                        }
+                      >
+                        {c.signed}/{c.total} signed
+                      </span>
+                      {c.generated > c.signed && (
+                        <div className="text-xs text-amber-800">
+                          {c.generated - c.signed} not signed
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -442,11 +451,11 @@ export function ProjectDashboard({
                     const needed = required.includes(docTemplateId);
                     const statusLabel = !doc
                       ? needed
-                        ? "missing"
+                        ? "Missing"
                         : "—"
                       : doc.status === "signed"
-                        ? "signed"
-                        : "generated";
+                        ? "Signed"
+                        : "Not signed";
                     return (
                       <tr
                         key={s.id}

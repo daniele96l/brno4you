@@ -65,7 +65,11 @@ export function GenerateDocumentForm({
                 <div
                   className={`mt-1 text-xs ${selectedId === t.id ? "text-white/80" : "text-[var(--mint-text)]"}`}
                 >
-                  {signed ? "Signed" : done ? "Generated" : "Waiting for ID verify"}
+                  {signed
+                    ? "Signed"
+                    : done
+                      ? "Not signed"
+                      : "Waiting for ID verify"}
                 </div>
               </button>
             );
@@ -80,8 +84,8 @@ export function GenerateDocumentForm({
             {existing?.status === "signed"
               ? `Signed ${existing.signed_at ? new Date(existing.signed_at).toLocaleString() : ""} by ${existing.signer_name || "participant"}`
               : existing
-                ? `Generated ${new Date(existing.created_at).toLocaleString()}`
-                : "Not generated yet — created after ID verification."}
+                ? "Not signed yet — open the PDF to see the signature section."
+                : "Not available yet — created after ID verification."}
           </p>
           {existing && (
             <div className="mt-3">
@@ -118,10 +122,10 @@ export function GenerateDocumentForm({
               <span>
                 {d.filename}{" "}
                 <span className="text-[var(--muted)]">
-                  ({d.status}
+                  ({d.status === "signed" ? "Signed" : "Not signed"}
                   {d.signed_at
                     ? ` · ${new Date(d.signed_at).toLocaleString()}`
-                    : ` · ${new Date(d.created_at).toLocaleString()}`}
+                    : ""}
                   )
                 </span>
               </span>

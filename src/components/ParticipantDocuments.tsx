@@ -383,7 +383,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
                   {labelFor(tid)}
                 </span>
                 <span className="ml-auto text-xs text-[var(--muted)]">
-                  {signed ? "Signed" : d ? "Ready" : "Preparing…"}
+                  {signed ? "Signed" : d ? "Not signed" : "Preparing…"}
                 </span>
               </button>
             </li>

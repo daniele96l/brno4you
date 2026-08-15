@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent, isAdminAuthenticated } from "@/lib/auth";
+import { stampNotSignedBanner } from "@/lib/documents/pdf";
 import { getDocument } from "@/lib/students";
 import { readUpload } from "@/lib/storage";
 
@@ -21,15 +22,21 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const path =
-    doc.status === "signed" && doc.signed_storage_path
-      ? doc.signed_storage_path
-      : doc.storage_path;
-  const buf = await readUpload(path);
+  const isSigned = doc.status === "signed" && !!doc.signed_storage_path;
+  const path = isSigned ? doc.signed_storage_path! : doc.storage_path;
+  let buf = await readUpload(path);
+  if (!isSigned) {
+    try {
+      buf = await stampNotSignedBanner(buf);
+    } catch {
+      // serve original if banner fails
+    }
+  }
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": doc.mime,
       "Content-Disposition": `inline; filename="${doc.filename}"`,
+      "Cache-Control": "private, no-store",
     },
   });
 }

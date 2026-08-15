@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
-import { stampSignedPdf } from "@/lib/documents/pdf";
+import { signatureLooksBlank, stampSignedPdf } from "@/lib/documents/pdf";
 import { getDocument, getStudent, saveDocument } from "@/lib/students";
 import { getDocTemplate } from "@/lib/documents/templates";
 import { readUpload, saveUpload } from "@/lib/storage";
@@ -58,8 +58,11 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const b64 = body.signaturePngBase64.replace(/^data:image\/png;base64,/, "");
   const signaturePng = Buffer.from(b64, "base64");
-  if (signaturePng.length < 100) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  if (await signatureLooksBlank(signaturePng)) {
+    return NextResponse.json(
+      { error: "Draw your signature in the box before confirming" },
+      { status: 400 },
+    );
   }
 
   try {
