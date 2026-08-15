@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { explainApiError } from "@/lib/api-error";
+import { normalizeDate } from "@/lib/normalize";
 import {
   STUDENT_FIELD_LABELS,
   studentFormSchema,
@@ -22,6 +23,55 @@ type Props = {
   projectTitle?: string;
   projectType?: ProjectType;
 };
+
+/** Never show Safari’s cryptic “pattern” message — always explain the field. */
+function showFormError(raw: unknown, fallback: string): string {
+  if (raw == null || raw === "") return fallback;
+  const text =
+    typeof raw === "string"
+      ? raw
+      : raw instanceof Error
+        ? raw.message
+        : typeof raw === "object"
+          ? explainApiError(raw, fallback)
+          : fallback;
+  if (text.startsWith("Please fix:")) return text;
+  if (
+    /^the string did not match the expected pattern\.?$/i.test(text.trim()) ||
+    (/expected pattern|did not match/i.test(text) && text.length < 80)
+  ) {
+    return "Birth date or email looks wrong. Pick day / month / year for your birth date, and use an email like name@example.com.";
+  }
+  return explainApiError(text, fallback);
+}
+
+function splitIsoDate(iso: string): { y: string; m: string; d: string } {
+  const n = normalizeDate(iso);
+  const m = n.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return { y: "", m: "", d: "" };
+  return { y: m[1], m: m[2], d: m[3] };
+}
+
+const YEAR_OPTIONS = Array.from({ length: 80 }, (_, i) =>
+  String(new Date().getFullYear() - 10 - i),
+);
+const MONTH_OPTIONS = [
+  ["01", "01 — January"],
+  ["02", "02 — February"],
+  ["03", "03 — March"],
+  ["04", "04 — April"],
+  ["05", "05 — May"],
+  ["06", "06 — June"],
+  ["07", "07 — July"],
+  ["08", "08 — August"],
+  ["09", "09 — September"],
+  ["10", "10 — October"],
+  ["11", "11 — November"],
+  ["12", "12 — December"],
+] as const;
+const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) =>
+  String(i + 1).padStart(2, "0"),
+);
 
 function useObjectUrl(file: File | null) {
   const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
@@ -55,6 +105,11 @@ export function StudentForm({
 
   const frontPreview = useObjectUrl(frontFile);
   const backPreview = useObjectUrl(backFile);
+
+  const initialBirth = splitIsoDate(initial?.birth_date ?? "");
+  const [birthY, setBirthY] = useState(initialBirth.y);
+  const [birthM, setBirthM] = useState(initialBirth.m);
+  const [birthD, setBirthD] = useState(initialBirth.d);
 
   const {
     register,
@@ -95,6 +150,21 @@ export function StudentForm({
     if (!hasSecondSurname) setValue("second_surname", "");
   }, [hasSecondSurname, setValue]);
 
+  useEffect(() => {
+    if (birthY && birthM && birthD) {
+      setValue("birth_date", `${birthY}-${birthM}-${birthD}`, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    } else {
+      setValue("birth_date", "", { shouldValidate: false });
+    }
+  }, [birthY, birthM, birthD, setValue]);
+
+  function setBanner(raw: unknown, fallback: string) {
+    setError(showFormError(raw, fallback));
+  }
+
   async function verify(studentId: string, force = false) {
     setVerifying(true);
     setError(null);
@@ -107,7 +177,7 @@ export function StudentForm({
       const json = await res.json();
       if (!res.ok) {
         throw new Error(
-          explainApiError(
+          showFormError(
             json.error,
             "ID verification failed — check your photos and try again",
           ),
@@ -122,10 +192,9 @@ export function StudentForm({
         setMismatches(json.mismatches || []);
       }
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? explainApiError(e.message, "ID verification failed")
-          : "ID verification failed — please try again",
+      setBanner(
+        e instanceof Error ? e.message : null,
+        "ID verification failed — please try again",
       );
       setMatchOk(false);
     } finally {
@@ -167,7 +236,7 @@ export function StudentForm({
       if (!res.ok) {
         applyServerFieldErrors(json.error);
         throw new Error(
-          explainApiError(
+          showFormError(
             json.error,
             "Could not save your application — check the fields below",
           ),
@@ -180,10 +249,9 @@ export function StudentForm({
       }
       await verify(json.student.id, true);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? explainApiError(e.message, "Could not save your application")
-          : "Could not save your application — please try again",
+      setBanner(
+        e instanceof Error ? e.message : null,
+        "Could not save your application — please try again",
       );
     } finally {
       setSubmitting(false);
@@ -217,40 +285,24 @@ export function StudentForm({
           : "";
       if (!message) continue;
       const label = STUDENT_FIELD_LABELS[field] || field;
-      const friendly = explainApiError(
-        message,
-        /pattern/i.test(message)
-          ? field === "birth_date"
-            ? "use YYYY-MM-DD (e.g. 2005-08-15)"
-            : "check the format of this field"
-          : message,
-      );
-      lines.push(`${label}: ${friendly}`);
+      lines.push(`${label}: ${showFormError(message, message)}`);
     }
-    // iOS Safari sometimes reports pattern errors with empty RHF errors
     if (lines.length === 0) {
-      const invalid = document.querySelector<HTMLInputElement>(
-        "form input:invalid, form select:invalid",
+      lines.push(
+        "Birth date: pick day, month and year",
+        "Email: use name@example.com",
       );
-      if (invalid?.name) {
-        const label = STUDENT_FIELD_LABELS[invalid.name] || invalid.name;
-        lines.push(
-          `${label}: ${
-            invalid.name === "birth_date"
-              ? "use the date picker or type YYYY-MM-DD (e.g. 2005-08-15)"
-              : invalid.name === "email"
-                ? "enter a valid email (e.g. name@example.com)"
-                : "check this field and try again"
-          }`,
-        );
-        scrollToField(invalid.name);
-      }
     }
-    setError(
-      lines.length
-        ? `Please fix:\n${lines.join("\n")}`
-        : "Please fix the highlighted fields below",
+    setBanner(
+      `Please fix:\n${lines.join("\n")}`,
+      "Please fix the highlighted fields below",
     );
+    if (errs.birth_date || !birthY || !birthM || !birthD) {
+      document
+        .getElementById("birth-date-year")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const first = Object.keys(errs)[0];
     if (first) scrollToField(first);
   }
@@ -274,11 +326,9 @@ export function StudentForm({
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(
-          explainApiError(
-            json.error,
-            "Could not ignore the differences — try again",
-          ),
+        setBanner(
+          json.error,
+          "Could not ignore the differences — try again",
         );
         return;
       }
@@ -286,10 +336,9 @@ export function StudentForm({
       setMismatches(null);
       setMatchOk(true);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? explainApiError(e.message, "Could not ignore the differences")
-          : "Could not ignore the differences — check your connection",
+      setBanner(
+        e instanceof Error ? e.message : null,
+        "Could not ignore the differences — check your connection",
       );
     }
   }
@@ -379,16 +428,59 @@ export function StudentForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Birth date"
-              hint="International format YYYY-MM-DD (e.g. 2005-08-15). Use the date picker or type it."
+              hint="Stored as YYYY-MM-DD. Pick day, month and year (no typing)."
               error={errors.birth_date?.message}
             >
-              <input
-                type="date"
-                className="input"
-                autoComplete="bday"
-                placeholder="YYYY-MM-DD"
-                {...register("birth_date")}
-              />
+              <input type="hidden" {...register("birth_date")} />
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  id="birth-date-day"
+                  className="input"
+                  value={birthD}
+                  onChange={(e) => setBirthD(e.target.value)}
+                  aria-label="Day of birth"
+                >
+                  <option value="">Day</option>
+                  {DAY_OPTIONS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  id="birth-date-month"
+                  className="input"
+                  value={birthM}
+                  onChange={(e) => setBirthM(e.target.value)}
+                  aria-label="Month of birth"
+                >
+                  <option value="">Month</option>
+                  {MONTH_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  id="birth-date-year"
+                  className="input"
+                  value={birthY}
+                  onChange={(e) => setBirthY(e.target.value)}
+                  aria-label="Year of birth"
+                >
+                  <option value="">Year</option>
+                  {YEAR_OPTIONS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {birthY && birthM && birthD && (
+                <p className="mt-1 text-xs text-[var(--mint-text)]">
+                  = {birthY}-{birthM}-{birthD}
+                </p>
+              )}
             </Field>
             <Field label="Nationality" error={errors.nationality?.message}>
               <input className="input" {...register("nationality")} />
@@ -398,6 +490,9 @@ export function StudentForm({
                 type="text"
                 inputMode="email"
                 autoComplete="email"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
                 className="input"
                 placeholder="name@example.com"
                 {...register("email")}
