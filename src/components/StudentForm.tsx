@@ -167,7 +167,75 @@ export function StudentForm({
   }
 
   function setBanner(raw: unknown, fallback: string) {
-    setError(showFormError(raw, fallback));
+    const text =
+      typeof raw === "string"
+        ? raw
+        : raw instanceof Error
+          ? raw.message
+          : "";
+    // Pattern / vague format errors → find the real field and scroll to it
+    if (
+      !text ||
+      /format check|wrong format|did not match|expected pattern|must match|invalid string|A field/i.test(
+        text,
+      )
+    ) {
+      const scanned = collectMistakes();
+      if (scanned.length) {
+        publishMistakes(scanned);
+        return;
+      }
+      const invalid = document.querySelector<
+        HTMLInputElement | HTMLSelectElement
+      >("form input:invalid, form select:invalid, form :invalid");
+      const name =
+        invalid?.getAttribute("name") ||
+        invalid?.id?.replace(/^birth-date-/, "birth_date") ||
+        "";
+      if (name === "birth-date-day" || name === "birth-date-month" || name === "birth-date-year" || name.includes("birth")) {
+        publishMistakes([
+          {
+            field: "birth_date",
+            message: formatFieldMistake(
+              "birth_date",
+              birthIsoFromSelects() ||
+                `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`,
+            ),
+            focusId: "birth-date-day",
+          },
+        ]);
+        return;
+      }
+      if (name && STUDENT_FIELD_LABELS[name]) {
+        publishMistakes([
+          {
+            field: name,
+            message: formatFieldMistake(
+              name,
+              (invalid as HTMLInputElement | null)?.value,
+            ),
+            focusId: name === "birth_date" ? "birth-date-day" : name,
+          },
+        ]);
+        return;
+      }
+    }
+    const explained = showFormError(raw, fallback);
+    if (
+      explained &&
+      !/format check|A field failed|A field has the wrong format/i.test(
+        explained,
+      )
+    ) {
+      setError(explained);
+      return;
+    }
+    const scanned = collectMistakes();
+    if (scanned.length) {
+      publishMistakes(scanned);
+      return;
+    }
+    setError(fallback);
   }
 
   function focusMistake(focusId: string) {

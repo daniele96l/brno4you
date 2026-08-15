@@ -132,11 +132,9 @@ export function formatStudentValidationError(
         /* fall through */
       }
     }
-    if (/did not match the expected pattern/i.test(error)) {
-      return (
-        "A field failed a format check — THIS IS WRONG\n" +
-        "Open the red fields below; each one shows what you entered vs what is expected."
-      );
+    if (/did not match the expected pattern|match the expected pattern|must match pattern|invalid string/i.test(error)) {
+      // Caller must resolve to a concrete field via collectMistakes — do not invent a vague banner.
+      return "";
     }
     return error;
   }

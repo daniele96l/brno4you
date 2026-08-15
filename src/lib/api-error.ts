@@ -93,14 +93,6 @@ const MESSAGE_HINTS: Array<{ test: RegExp; text: string }> = [
     test: /failed to fetch|networkerror|load failed/i,
     text: "Network error — check your connection and try again.",
   },
-  {
-    test: /did not match the expected pattern|match the expected pattern/i,
-    text: "A field failed a format check — see each field warning for what you entered vs what is expected.",
-  },
-  {
-    test: /match pattern|must match|invalid string/i,
-    text: "A field has the wrong format — each red field shows what you entered vs what is expected.",
-  },
 ];
 
 function humanizeMessage(message: string): string {
@@ -125,13 +117,23 @@ export function explainApiError(
   }
 
   if (typeof error === "string") {
+    if (
+      /did not match the expected pattern|match the expected pattern|must match pattern|invalid string/i.test(
+        error,
+      )
+    ) {
+      // Let the form resolve the concrete field — never return a vague format banner.
+      return "";
+    }
     const fromZodJson = formatStudentValidationError(error);
     if (
-      fromZodJson.includes("THIS IS WRONG") ||
-      fromZodJson.includes("You entered:")
+      fromZodJson &&
+      (fromZodJson.includes("THIS IS WRONG") ||
+        fromZodJson.includes("You entered:"))
     ) {
       return fromZodJson;
     }
+    if (fromZodJson) return fromZodJson;
     return humanizeMessage(error) || fallback;
   }
 
