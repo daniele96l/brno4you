@@ -136,9 +136,6 @@ export async function ensureSampleDataSeeded() {
     listPartners(),
   ]);
 
-  let seededStudents = 0;
-  let seededPartners = 0;
-
   if (students.length === 0) {
     for (const data of SAMPLE_STUDENTS) {
       const student = createStudentFromForm(data);
@@ -146,7 +143,6 @@ export async function ensureSampleDataSeeded() {
       student.id = `sample_${randomId().slice(0, 8)}`;
       student.id_verification_status = "matched";
       await saveStudent(student);
-      seededStudents += 1;
     }
   }
 
@@ -154,7 +150,6 @@ export async function ensureSampleDataSeeded() {
     const now = new Date().toISOString();
     for (const p of SAMPLE_PARTNERS) {
       await savePartner({ ...p, created_at: now, updated_at: now });
-      seededPartners += 1;
     }
   }
 
@@ -163,7 +158,6 @@ export async function ensureSampleDataSeeded() {
     "./documents/templates"
   );
   const settings = await getProjectSettings();
-  let seededSettings = false;
   if (!settings.project_name?.trim()) {
     await saveProjectSettings({
       project_name: "Together for Inclusion — Youth Exchange Brno 2026",
@@ -176,40 +170,10 @@ export async function ensureSampleDataSeeded() {
       coordinator_email: "hedvika@brnoforyou.cz",
       coordinator_phone: "+420777000111",
     });
-    seededSettings = true;
   }
 
-  const result = {
+  return {
     students: await listStudents(),
     partners: await listPartners(),
   };
-
-  // #region agent log
-  fetch("http://127.0.0.1:7703/ingest/6f0aa57b-155b-4f24-93e7-8b7d5e1c75fb", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "6ae41f",
-    },
-    body: JSON.stringify({
-      sessionId: "6ae41f",
-      runId: "seed",
-      hypothesisId: "A",
-      location: "partners.ts:ensureSampleDataSeeded",
-      message: "sample seed result",
-      data: {
-        beforeStudents: students.length,
-        beforePartners: partners.length,
-        seededStudents,
-        seededPartners,
-        seededSettings,
-        afterStudents: result.students.length,
-        afterPartners: result.partners.length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
-  return result;
 }
