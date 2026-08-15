@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getStudent, listStudentDocuments } from "@/lib/students";
-import { listTemplates } from "@/lib/documents/registry";
 import { GenerateDocumentForm } from "@/components/GenerateDocumentForm";
+import { ensureTemplatesSeeded } from "@/lib/documents/seed";
+import { listDocTemplates } from "@/lib/documents/templates";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -16,7 +17,8 @@ export default async function AdminStudentPage({ params }: Props) {
   if (!student) notFound();
 
   const documents = await listStudentDocuments(id);
-  const templates = listTemplates();
+  await ensureTemplatesSeeded();
+  const templates = await listDocTemplates();
 
   const name = [
     student.first_name,

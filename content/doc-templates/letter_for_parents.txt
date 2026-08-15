@@ -1,0 +1,29 @@
+Letter for Parents/Legal Guardians
+Youth Mobility Project in the Frame of the ERASMUS+ Programme
+Project name: {{project_name}}
+
+Accreditation No.: {{accreditation_no}}
+
+Project No.: {{project_no}}
+
+Dates (including travel days): {{dates}}
+
+Venue (place, country): {{venue}}
+
+Dear Parents/Legal Guardians,
+In the name of the Brno for you, a non-governmental organization providing youth international opportunities under Erasmus+ program, I would like to welcome your child on board of our project. 
+Erasmus+ Youth mobility projects aim to promote European values, identity and international friendship between young Europeans. In order to do that, we organise international youth camps during which youngsters in the age group of 15-17, coming from different countries, meet to experience together an unforgettable adventure. Schedules of activities are full of teambuilding sessions, discussions, sharing experience, ideas, debates, simulations, cultural exchanges that help us to support the youth in their self-development.
+Brno for you organization has over 12 years of experience in youth work. Since this time, we have organized around 39 exchanges involving over 939 participants from all over Europe. We are accredited by the Czech National Agency, which guarantees the professionalism and quality of our projects.
+We hope that for your child, also, our project will be a life-changing experience. Therefore, we would like to provide you some practical information concerning the upcoming exchange. 
+Safety is our priority. Therefore, participants are always accompanied by experienced adult youth leaders. Venues for the youth exchanges were carefully chosen, with the special focus on safety of the participants. Therefore, all of them are equipped with the necessary facilities.
+Liability, travel and accident insurance are provided by organisers. Please remember that participants are obliged to bring the European Health Insurance Card with them. To ensure a decent care and comfort for each participant, parents or participants themselves are requested to inform us about any special requirements of your children such as allergies, intolerance, prescribed medicine to be taken. 
+To ensure safety and high quality of the exchange, consumption of alcohol, cigarettes and other illegal substances, as well as any kind of abusive behaviours, are prohibited. Youth leaders are legally bound to accompany the group throughout the whole stay, therefore leaving the venue without permission or supervision of the youth leader is also not allowed. 
+Participants are requested to sign “Zero Tolerance Protocol” which oblige them to respect the regulations given above. Violation of the protocol may lead to serious consequences, including sending a participant back home on his/her own costs.
+Prior to departure, please make sure, that your child has all necessary documents: valid passport or ID and European Health Insurance Card. For any further questions, please contact the national coordinator.
+I hope that the exchange will not only be great fun for your child, but also an important learning opportunity, validated by the official certificate of the European Union - Youthpass.
+Yours sincerely
+ 
+{{coordinator_name}} Tomečková, 
+2nd vice-president of Brno for you, Coordinator of Erasmus+ projects
++420 702 977 187, viky@brnoforouy.cz
+www.brnoforyou.cz

@@ -1,0 +1,42 @@
+Confirmation and Consent by Legal Guardian
+Youth Mobility Project in the Frame of the ERASMUS+ Programme
+
+Project name: {{project_name}}
+
+Accreditation No.: {{accreditation_no}}
+
+Project No.: {{project_no}}
+
+Dates (including travel days): {{dates}}
+
+Venue (place, country): {{venue}}
+
+This confirmation is complementary to the documents of the KA1 project under the Erasmus+ Youth Programme of the European Union and to the respective funding contract signed between Brno for you, z.s. (Applicant Organisation) and the Czech National Agency.
+
+Participant
+Name and surname of child / participant: {{full_name}}            Date of birth: {{birth_date}}
+
+
+Declaration and consents
+I, the undersigned legal guardian/parent, confirm that I have received appropriate information about the above-mentioned Youth Mobility project, especially the infopack and letter for parents, and I agree that my child will participate in this residential event and will travel away from home to and from the specified destination.
+1. Compliance and behaviour: I confirm that my child has been instructed to follow the laws of the host country, safety instructions and reasonable instructions of the project and leaders. I understand that behaviour which seriously endangers the child, other participants or the project may result in early termination of participation and return home at the legal guardian’s expense, to the extent permitted by applicable law.
+2. Personal data protection (GDPR): I acknowledge that Brno for you, z.s., Nové sady 988/2, 602 00 Brno, Czech Republic, IČO 03376010, e-mail: info@brnoforyou.cz, acts as the personal data controller for project administration and safety purposes. Personal data are processed in accordance with Regulation (EU) 2016/679 (GDPR) and Act No. 110/2019 Coll., on Personal Data Processing, as amended. Processed data may include identification and contact details of the participant and legal guardians, date of birth, travel and accommodation data, emergency contacts, relevant health and safety information, and project documentation. The legal bases may include performance of project-related arrangements, compliance with legal/grant obligations, legitimate interests in organising and documenting the project, consent where applicable, and vital interests in emergencies. Health-related information is processed only where necessary, on the basis of explicit consent and/or vital interests in urgent situations. Data may be shared only with persons and institutions necessary for the project, for example project partners, Erasmus+/National Agency or EU bodies, accommodation, transport, insurance and medical providers, and public authorities where required by law. Data will be kept only for the period required for project, grant, accounting, legal and safety purposes.
+3. Photos, video and audio recordings: I agree that photographs, video recordings and other audio-visual recordings of my child may be taken during the project and used for project documentation, reporting, visibility and promotion of the project and the Erasmus+ programme, including in printed materials, presentations, websites and official social media channels of Brno for you, z.s., project partners and relevant project/funding institutions. The photographs must be in accordance with ethics and good manners.
+4. Medical fitness, infectious diseases and psychological well-being: I declare that, to the best of my knowledge, my child is physically and psychologically fit to participate in an international residential youth mobility, including group activities, travel, shared accommodation and limited independent free time. I further declare that my child does not suffer from any infectious disease, has not been ordered quarantine/isolation, and has no symptoms or known circumstances that would make participation unsafe for the child or others. I undertake to inform the organiser immediately about any change before departure or during the project, including any relevant physical or mental health concern, medication, allergy, risk behaviour, panic/anxiety episodes, self-harm risk or other circumstance that may require support or supervision.
+5. Emergency medical care and possible transfer/admission to a medical facility: In an emergency or where leaders reasonably believe that the child needs professional help, I authorise the organiser and the leader to contact emergency services, arrange medical examination or treatment, accompany the child to a medical facility, provide necessary information to medical staff and follow professional instructions, including transfer or admission to hospital or another appropriate facility if recommended or necessary. The organiser will inform the legal guardian as soon as reasonably possible.
+6. Administration of over-the-counter medicines: I consent to the organiser and leader administering or helping my child take over-the-counter medicines where reasonably needed during the project, for example for fever, pain, allergy symptoms, travel sickness, digestive problems or minor injuries, always in an age-appropriate dose and in accordance with the package leaflet. 
+Please list all over-the-counter medicines or active substances that must NOT be given to your child:
+
+7. Transport by private/passenger car in urgent situations: I agree that, in urgent or exceptional situations connected with the project, my child may be transported in a private/passenger car by an adult project leader or another authorised adult connected with the organiser, for example if the child misses a public transport connection, or for medical examination/treatment. The driver must hold a valid driving licence, and the child must use a seat belt and applicable safety equipment. In life-threatening emergencies, the organiser should primarily contact emergency services.
+8. Independent free time during town visits: I agree that during organised visits to a town or similar public place, my child may be allowed limited independent free time without the continuous physical presence of a project leader, provided that the child follows the leader’s instructions, remains reachable by phone, respects the agreed meeting time and place, moves at least in pairs or groups if instructed, and shares live location with the leader/organiser via WhatsApp (or another agreed method if WhatsApp is unavailable) for the duration of such free time. The location sharing is used only for safety and supervision during the activity.
+9. Emergency contacts and pick-up authorisation: I confirm that the emergency contact below is valid and reachable during the project. If the organiser determines that the child cannot safely continue in the project because of health, psychological, disciplinary or safety reasons, I agree to cooperate on safe return or collection of the child without undue delay.
+Name of legal guardian/ emergency contact, relationship (e.g. mother)
+
+Phone number (emergency)
+
+10. Truthful information and duty to cooperate: I confirm that all information provided by me is true, complete and up to date. If false, incomplete or withheld information causes risk to the child, other participants or the project, I accept responsibility for the consequences to the extent permitted by applicable law and agree to cooperate immediately with the organiser.
+
+
+
+Place and date
+Signature of legal guardian/parent

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "zero_tolerance",
+    "label": "Zero tolerance protocol",
+    "scope": "student",
+    "file": "zero_tolerance.txt"
+  },
+  {
+    "id": "participants_agreement",
+    "label": "Participants agreement",
+    "scope": "student",
+    "file": "participants_agreement.txt"
+  },
+  {
+    "id": "legal_guardian_confirmation",
+    "label": "Confirmation by legal guardian",
+    "scope": "student",
+    "file": "legal_guardian_confirmation.txt"
+  },
+  {
+    "id": "travel_tickets_declaration",
+    "label": "Declaration Travel Tickets",
+    "scope": "student",
+    "file": "travel_tickets_declaration.txt"
+  },
+  {
+    "id": "letter_for_parents",
+    "label": "Letter for parents",
+    "scope": "student",
+    "file": "letter_for_parents.txt"
+  },
+  {
+    "id": "contract_leaders_minors",
+    "label": "Contract for leaders (minors)",
+    "scope": "student",
+    "file": "contract_leaders_minors.txt"
+  },
+  {
+    "id": "partnership_ye",
+    "label": "Partnership agreement YE",
+    "scope": "general",
+    "file": "partnership_ye.txt"
+  },
+  {
+    "id": "partnership_tc",
+    "label": "Partnership agreement TC",
+    "scope": "general",
+    "file": "partnership_tc.txt"
+  }
+]

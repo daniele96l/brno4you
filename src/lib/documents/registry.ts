@@ -1,7 +1,18 @@
 import type { DocumentTemplate } from "./types";
+import type { Student } from "../types";
+import { textToPdf } from "./pdf";
+import {
+  buildPlaceholderMap,
+  fillTemplate,
+  getDocTemplate,
+  getProjectSettings,
+  studentFullName,
+} from "./templates";
 import { studentSummaryTemplate } from "./student-summary";
 
-/** Register new document templates here. */
+export { studentSummaryTemplate };
+
+/** Legacy code registry kept for the summary PDF only. */
 export const documentTemplates: DocumentTemplate[] = [studentSummaryTemplate];
 
 export function getTemplate(id: string) {
@@ -10,4 +21,34 @@ export function getTemplate(id: string) {
 
 export function listTemplates() {
   return documentTemplates.map(({ id, label }) => ({ id, label }));
+}
+
+export async function generateFromDbTemplate(
+  templateId: string,
+  student: Student | null,
+) {
+  const template = await getDocTemplate(templateId);
+  if (!template) throw new Error("Unknown template");
+
+  if (template.scope === "student" && !student) {
+    throw new Error("This template requires a student");
+  }
+
+  const settings = await getProjectSettings();
+  const filled = fillTemplate(
+    template.body,
+    buildPlaceholderMap(settings, student),
+  );
+  const buffer = await textToPdf(template.label, filled);
+
+  const slug = student
+    ? studentFullName(student).replace(/\s+/g, "-").toLowerCase() || student.id
+    : "general";
+
+  return {
+    buffer,
+    filename: `brno4you-${template.id}-${slug}.pdf`,
+    mime: "application/pdf" as const,
+    template,
+  };
 }

@@ -54,7 +54,7 @@ export type Student = {
 
 export type GeneratedDocument = {
   id: string;
-  student_id: string;
+  student_id: string | null;
   template_id: string;
   filename: string;
   mime: string;

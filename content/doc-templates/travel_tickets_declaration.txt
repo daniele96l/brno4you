@@ -1,0 +1,29 @@
+Declaration of Honour
+Youth Mobility Project in the Frame of the ERASMUS+ Programme
+
+Project name: {{project_name}}
+
+Accreditation No.: {{accreditation_no}}
+
+Project No.: {{project_no}}
+
+Dates (including travel days): {{dates}}
+
+Venue (place, country): {{venue}}
+
+This declaration forms part of the documentation for the KA1 project implemented under the Erasmus+ Youth Programme of the European Union and the funding agreement signed between Brno for you, z.s. as the Applicant Organisation and the Czech National Agency. The project is coordinated in accordance with the rules set out in the Erasmus+ Programme Guide and its Quality Standards.
+
+I, {{full_name}}                Date of birth: {{birth_date}}
+
+
+hereby declare that I will participate in the above-mentioned Erasmus+ project.
+
+If I cancel my participation or fail to participate without a duly documented reason of force majeure, I agree, to the extent permitted by applicable law, to reimburse the organiser in full for non-refundable travel costs already incurred on my behalf.
+
+I undertake to inform the organiser immediately if I become unable to participate and to provide relevant documentation where applicable.
+For participants under the age of 18, this declaration must also be signed by a parent/legal guardian, who confirms their consent with the participant’s participation and with the above-mentioned reimbursement obligation, where applicable.
+
+
+
+Place and date, Signature of the participant
+Name, surname and signature of legal guardian/parent, if applicable
