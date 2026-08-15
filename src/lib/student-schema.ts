@@ -2,54 +2,45 @@ import { z } from "zod";
 
 export const studentFormSchema = z
   .object({
-    first_name: z.string().trim().min(1, "First name is required"),
+    first_name: z.string().trim().min(1, "required"),
     has_second_name: z.boolean(),
     second_name: z.string().trim().optional().nullable(),
-    surname: z.string().trim().min(1, "Surname is required"),
+    surname: z.string().trim().min(1, "required"),
     has_second_surname: z.boolean(),
     second_surname: z.string().trim().optional().nullable(),
     birth_date: z
       .string()
       .trim()
-      .min(1, "Birth date is required — pick day, month and year")
-      .regex(
-        /^\d{4}-\d{2}-\d{2}$/,
-        "Birth date is required — pick day, month and year",
-      ),
-    nationality: z.string().trim().min(1, "Nationality is required"),
+      .min(1, "required")
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "format"),
+    nationality: z.string().trim().min(1, "required"),
     email: z
       .string()
       .trim()
-      .min(1, "Email is required")
+      .min(1, "required")
       .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-        message: "Enter a valid email (e.g. name@example.com)",
+        message: "format",
       }),
-    phone: z
-      .string()
-      .trim()
-      .min(5, "Phone number is required (at least 5 digits)"),
+    phone: z.string().trim().min(5, "too_short"),
     document_type: z.enum(["id_card", "passport"], {
-      error: "Choose ID card or passport",
+      error: "required",
     }),
-    document_number: z.string().trim().min(1, "Document number is required"),
-    document_country: z
-      .string()
-      .trim()
-      .min(1, "Issuing country is required"),
+    document_number: z.string().trim().min(1, "required"),
+    document_country: z.string().trim().min(1, "required"),
   })
   .superRefine((data, ctx) => {
     if (data.has_second_name && !data.second_name?.trim()) {
       ctx.addIssue({
         code: "custom",
         path: ["second_name"],
-        message: "Second name is required when checked",
+        message: "required",
       });
     }
     if (data.has_second_surname && !data.second_surname?.trim()) {
       ctx.addIssue({
         code: "custom",
         path: ["second_surname"],
-        message: "Second surname is required when checked",
+        message: "required",
       });
     }
   });
@@ -70,10 +61,52 @@ export const STUDENT_FIELD_LABELS: Record<string, string> = {
   document_type: "Document type",
 };
 
-/** Turn Zod flatten / API validation payload into readable lines. */
-export function formatStudentValidationError(error: unknown): string {
+/** What a correct value should look like — one field at a time. */
+export const STUDENT_FIELD_EXPECTED: Record<string, string> = {
+  first_name: "your first name as on the ID (not empty)",
+  second_name: "your second / middle name (because the checkbox is on)",
+  surname: "your surname as on the ID (not empty)",
+  second_surname: "your second surname (because the checkbox is on)",
+  birth_date: "YYYY-MM-DD from the day + month + year lists (e.g. 2005-08-15)",
+  nationality: "a nationality (e.g. Italian, Czech, ITA)",
+  email: "a full email like name@example.com",
+  phone: "a phone number with at least 5 digits",
+  document_number: "the document number from your ID/passport",
+  document_country: "the country that issued the document",
+  document_type: "either “ID card” or “Passport”",
+};
+
+function displayValue(value: unknown): string {
+  if (value == null) return "(empty)";
+  const s = String(value).trim();
+  return s.length ? s : "(empty)";
+}
+
+/**
+ * One field, one warning — always: THIS IS WRONG / you entered Y / expected X.
+ */
+export function formatFieldMistake(
+  field: string,
+  actual: unknown,
+  _zodHint?: string,
+): string {
+  const label = STUDENT_FIELD_LABELS[field] || field;
+  const expected =
+    STUDENT_FIELD_EXPECTED[field] || "a valid value for this field";
+  const got = displayValue(actual);
+  return (
+    `${label} — THIS IS WRONG\n` +
+    `You entered: ${got}\n` +
+    `Expected instead: ${expected}`
+  );
+}
+
+/** Turn Zod flatten / API validation payload into per-field mistake lines. */
+export function formatStudentValidationError(
+  error: unknown,
+  values?: Partial<Record<string, unknown>>,
+): string {
   if (typeof error === "string" && error.trim()) {
-    // Zod sometimes stringifies the whole issues array — unwrap if possible
     if (error.trimStart().startsWith("[")) {
       try {
         const issues = JSON.parse(error) as Array<{
@@ -83,17 +116,25 @@ export function formatStudentValidationError(error: unknown): string {
         if (Array.isArray(issues) && issues.length) {
           const lines = issues.map((issue) => {
             const field = String(issue.path?.[0] ?? "");
-            const label = STUDENT_FIELD_LABELS[field] || field || "Form";
-            const msg = humanizeZodMessage(issue.message || "Invalid value");
-            return `${label}: ${msg}`;
+            return formatFieldMistake(
+              field || "form",
+              values?.[field],
+              issue.message,
+            );
           });
-          return `Please fix:\n${lines.join("\n")}`;
+          return lines.join("\n\n");
         }
       } catch {
         /* fall through */
       }
     }
-    return humanizeZodMessage(error);
+    if (/did not match the expected pattern/i.test(error)) {
+      return (
+        "A field failed a format check — THIS IS WRONG\n" +
+        "Open the red fields below; each one shows what you entered vs what is expected."
+      );
+    }
+    return error;
   }
   if (!error || typeof error !== "object") {
     return "Could not save your application";
@@ -103,29 +144,17 @@ export function formatStudentValidationError(error: unknown): string {
     formErrors?: string[];
     fieldErrors?: Record<string, string[] | undefined>;
   };
-  const lines: string[] = [];
+  const blocks: string[] = [];
 
   for (const msg of payload.formErrors || []) {
-    if (msg) lines.push(humanizeZodMessage(msg));
+    if (msg) blocks.push(msg);
   }
   for (const [field, msgs] of Object.entries(payload.fieldErrors || {})) {
-    const label = STUDENT_FIELD_LABELS[field] || field;
-    for (const msg of msgs || []) {
-      if (msg) lines.push(`${label}: ${humanizeZodMessage(msg)}`);
+    if (msgs?.length) {
+      blocks.push(formatFieldMistake(field, values?.[field], msgs[0]));
     }
   }
 
-  if (lines.length === 0) return "Could not save your application";
-  return `Please fix:\n${lines.join("\n")}`;
-}
-
-function humanizeZodMessage(message: string): string {
-  if (
-    /did not match the expected pattern|match the expected pattern|match pattern|must match|invalid_format|Invalid string/i.test(
-      message,
-    )
-  ) {
-    return "Wrong format — for birth date use YYYY-MM-DD (e.g. 2005-08-15)";
-  }
-  return message;
+  if (blocks.length === 0) return "Could not save your application";
+  return blocks.join("\n\n");
 }

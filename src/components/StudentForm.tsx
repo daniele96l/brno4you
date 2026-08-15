@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { explainApiError } from "@/lib/api-error";
 import { normalizeDate } from "@/lib/normalize";
 import {
+  formatFieldMistake,
+  formatStudentValidationError,
   STUDENT_FIELD_LABELS,
   studentFormSchema,
   type StudentFormInput,
@@ -24,33 +26,41 @@ type Props = {
   projectType?: ProjectType;
 };
 
-/** Only rewrite Safari’s exact cryptic message — never blame a filled field. */
+/** Map raw/API/Safari errors to clear text — never merge birth date + email. */
 function showFormError(raw: unknown, fallback: string): string {
   if (raw == null || raw === "") return fallback;
-  const text =
-    typeof raw === "string"
-      ? raw
-      : raw instanceof Error
-        ? raw.message
-        : typeof raw === "object"
-          ? explainApiError(raw, fallback)
-          : fallback;
-  if (text.startsWith("Please fix:")) return text;
+  if (typeof raw === "object") {
+    return formatStudentValidationError(raw) || fallback;
+  }
+  const text = raw instanceof Error ? raw.message : String(raw);
+  if (/THIS IS WRONG/i.test(text) || text.includes("You entered:")) return text;
   if (/^the string did not match the expected pattern\.?$/i.test(text.trim())) {
     const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(
       "form :invalid",
     );
-    const name = el?.getAttribute("name") || el?.id || "";
-    if (name.includes("email") || el?.getAttribute("inputmode") === "email") {
-      return "Email looks invalid — use a full address like name@example.com";
+    const name = el?.getAttribute("name") || "";
+    if (name === "email") {
+      return formatFieldMistake(
+        "email",
+        (el as HTMLInputElement | null)?.value,
+      );
     }
-    if (name.includes("birth") || name.includes("date")) {
-      return "Birth date incomplete — choose day, month and year in all three lists";
+    if (name === "birth_date") {
+      return formatFieldMistake(
+        "birth_date",
+        (el as HTMLInputElement | null)?.value,
+      );
     }
     if (name && STUDENT_FIELD_LABELS[name]) {
-      return `${STUDENT_FIELD_LABELS[name]}: please check this field and try again`;
+      return formatFieldMistake(
+        name,
+        (el as HTMLInputElement | HTMLSelectElement | null)?.value,
+      );
     }
-    return "One field is still incomplete — scroll the form and check email, phone, and ID uploads";
+    return (
+      "A field failed a format check — THIS IS WRONG\n" +
+      "Check each red field below: every warning shows what you entered vs what is expected."
+    );
   }
   return explainApiError(text, fallback);
 }
@@ -127,6 +137,7 @@ export function StudentForm({
     watch,
     setValue,
     setError: setFieldError,
+    getValues,
     formState: { errors },
   } = useForm<StudentFormInput>({
     resolver: zodResolver(studentFormSchema),
@@ -257,10 +268,15 @@ export function StudentForm({
       if (!res.ok) {
         applyServerFieldErrors(json.error);
         throw new Error(
-          showFormError(
-            json.error,
-            "Could not save your application — check the fields below",
-          ),
+          typeof json.error === "object"
+            ? formatStudentValidationError(json.error, {
+                ...getValues(),
+                birth_date: birthIsoFromSelects() || getValues("birth_date"),
+              })
+            : showFormError(
+                json.error,
+                "Could not save your application — check the fields below",
+              ),
         );
       }
 
@@ -285,9 +301,14 @@ export function StudentForm({
       error as { fieldErrors?: Record<string, string[] | undefined> }
     ).fieldErrors;
     if (!fieldErrors) return;
+    const values = getValues();
     for (const [field, msgs] of Object.entries(fieldErrors)) {
-      const message = msgs?.[0];
-      if (!message) continue;
+      if (!msgs?.length) continue;
+      const message = formatFieldMistake(
+        field,
+        values[field as keyof StudentFormInput],
+        msgs[0],
+      );
       setFieldError(field as FieldPath<StudentFormInput>, {
         type: "server",
         message,
@@ -298,25 +319,37 @@ export function StudentForm({
   }
 
   function onInvalid(errs: FieldErrors<StudentFormInput>) {
-    const lines: string[] = [];
-    for (const [field, err] of Object.entries(errs)) {
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String(err.message || "")
-          : "";
-      if (!message) continue;
-      const label = STUDENT_FIELD_LABELS[field] || field;
-      lines.push(`${label}: ${showFormError(message, message)}`);
+    const values = getValues();
+    const blocks: string[] = [];
+    for (const field of Object.keys(errs) as (keyof StudentFormInput)[]) {
+      const err = errs[field];
+      if (!err || typeof err !== "object" || !("message" in err)) continue;
+      if (!err.message) continue;
+      let actual: unknown = values[field];
+      if (field === "birth_date") {
+        actual = birthIsoFromSelects() || actual || "(nothing selected)";
+      }
+      const block = formatFieldMistake(String(field), actual, String(err.message));
+      blocks.push(block);
+      setFieldError(field as FieldPath<StudentFormInput>, {
+        type: "manual",
+        message: block,
+      });
     }
-    if (lines.length === 0) {
-      lines.push(
-        "Birth date: pick day, month and year",
-        "Email: use name@example.com",
-      );
+    if (blocks.length === 0) {
+      if (!birthY || !birthM || !birthD) {
+        blocks.push(
+          formatFieldMistake(
+            "birth_date",
+            [birthD || "?", birthM || "?", birthY || "?"].join("/"),
+          ),
+        );
+      }
     }
-    setBanner(
-      `Please fix:\n${lines.join("\n")}`,
-      "Please fix the highlighted fields below",
+    setError(
+      blocks.length
+        ? blocks.join("\n\n")
+        : "Please fix the highlighted fields — each one shows what you entered vs what is expected.",
     );
     if (errs.birth_date || !birthY || !birthM || !birthD) {
       document
@@ -711,40 +744,30 @@ export function StudentForm({
           <ul className="space-y-3">
             {mismatches.map((m) => {
               const label = STUDENT_FIELD_LABELS[m.field] || m.field;
-              const isDate = m.field === "birth_date";
               return (
                 <li
                   key={m.field}
                   className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3"
                 >
                   <p className="font-semibold text-[var(--navy)]">
-                    Field: {label}
-                    {isDate ? " (YYYY-MM-DD)" : ""}
+                    {label} — THIS IS WRONG
                   </p>
-                  <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+                  <div className="mt-2 space-y-1 text-sm">
                     <p>
-                      <span className="text-[var(--muted)]">
-                        You entered:{" "}
-                      </span>
+                      <span className="text-[var(--muted)]">You entered: </span>
                       <span className="font-medium">
                         {m.formValue || "(empty)"}
                       </span>
                     </p>
                     <p>
                       <span className="text-[var(--muted)]">
-                        Document says:{" "}
+                        Document says instead:{" "}
                       </span>
                       <span className="font-medium text-amber-900">
                         {m.idValue || "(not readable)"}
                       </span>
                     </p>
                   </div>
-                  {isDate && (
-                    <p className="mt-2 text-xs text-[var(--muted)]">
-                      Dates must use international format YYYY-MM-DD (e.g.
-                      2005-08-15).
-                    </p>
-                  )}
                 </li>
               );
             })}
@@ -823,7 +846,9 @@ function Field({
         {children}
       </div>
       {error && (
-        <span className="block text-xs font-medium text-red-600">{error}</span>
+        <span className="block whitespace-pre-line text-xs font-medium text-red-600">
+          {error}
+        </span>
       )}
     </label>
   );

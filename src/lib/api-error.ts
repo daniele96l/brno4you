@@ -95,11 +95,11 @@ const MESSAGE_HINTS: Array<{ test: RegExp; text: string }> = [
   },
   {
     test: /did not match the expected pattern|match the expected pattern/i,
-    text: "One field failed a format check — look at the red messages under each field.",
+    text: "A field failed a format check — see each field warning for what you entered vs what is expected.",
   },
   {
     test: /match pattern|must match|invalid string/i,
-    text: "One field has the wrong format — see the list under Please fix.",
+    text: "A field has the wrong format — each red field shows what you entered vs what is expected.",
   },
 ];
 
@@ -126,7 +126,12 @@ export function explainApiError(
 
   if (typeof error === "string") {
     const fromZodJson = formatStudentValidationError(error);
-    if (fromZodJson.startsWith("Please fix:")) return fromZodJson;
+    if (
+      fromZodJson.includes("THIS IS WRONG") ||
+      fromZodJson.includes("You entered:")
+    ) {
+      return fromZodJson;
+    }
     return humanizeMessage(error) || fallback;
   }
 
