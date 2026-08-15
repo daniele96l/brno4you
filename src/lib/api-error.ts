@@ -94,8 +94,12 @@ const MESSAGE_HINTS: Array<{ test: RegExp; text: string }> = [
     text: "Network error — check your connection and try again.",
   },
   {
-    test: /did not match the expected pattern|match the expected pattern|match pattern|must match|invalid string/i,
-    text: "A field has the wrong format. Check Birth date (YYYY-MM-DD) and Email, then try again.",
+    test: /did not match the expected pattern|match the expected pattern/i,
+    text: "One field failed a format check — look at the red messages under each field.",
+  },
+  {
+    test: /match pattern|must match|invalid string/i,
+    text: "One field has the wrong format — see the list under Please fix.",
   },
 ];
 

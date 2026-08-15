@@ -20,7 +20,10 @@ export const studentFormSchema = z
     email: z
       .string()
       .trim()
-      .email("Enter a valid email (e.g. name@example.com)"),
+      .min(1, "Email is required")
+      .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+        message: "Enter a valid email (e.g. name@example.com)",
+      }),
     phone: z
       .string()
       .trim()

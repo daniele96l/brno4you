@@ -24,7 +24,7 @@ type Props = {
   projectType?: ProjectType;
 };
 
-/** Never show Safari’s cryptic “pattern” message — always explain the field. */
+/** Only rewrite Safari’s exact cryptic message — never blame a filled field. */
 function showFormError(raw: unknown, fallback: string): string {
   if (raw == null || raw === "") return fallback;
   const text =
@@ -36,11 +36,21 @@ function showFormError(raw: unknown, fallback: string): string {
           ? explainApiError(raw, fallback)
           : fallback;
   if (text.startsWith("Please fix:")) return text;
-  if (
-    /^the string did not match the expected pattern\.?$/i.test(text.trim()) ||
-    (/expected pattern|did not match/i.test(text) && text.length < 80)
-  ) {
-    return "Birth date or email looks wrong. Pick day / month / year for your birth date, and use an email like name@example.com.";
+  if (/^the string did not match the expected pattern\.?$/i.test(text.trim())) {
+    const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(
+      "form :invalid",
+    );
+    const name = el?.getAttribute("name") || el?.id || "";
+    if (name.includes("email") || el?.getAttribute("inputmode") === "email") {
+      return "Email looks invalid — use a full address like name@example.com";
+    }
+    if (name.includes("birth") || name.includes("date")) {
+      return "Birth date incomplete — choose day, month and year in all three lists";
+    }
+    if (name && STUDENT_FIELD_LABELS[name]) {
+      return `${STUDENT_FIELD_LABELS[name]}: please check this field and try again`;
+    }
+    return "One field is still incomplete — scroll the form and check email, phone, and ID uploads";
   }
   return explainApiError(text, fallback);
 }
@@ -150,16 +160,20 @@ export function StudentForm({
     if (!hasSecondSurname) setValue("second_surname", "");
   }, [hasSecondSurname, setValue]);
 
-  useEffect(() => {
-    if (birthY && birthM && birthD) {
-      setValue("birth_date", `${birthY}-${birthM}-${birthD}`, {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
-    } else {
-      setValue("birth_date", "", { shouldValidate: false });
-    }
-  }, [birthY, birthM, birthD, setValue]);
+  function birthIsoFromSelects() {
+    if (birthY && birthM && birthD) return `${birthY}-${birthM}-${birthD}`;
+    return "";
+  }
+
+  function syncBirthDate() {
+    const iso = birthIsoFromSelects();
+    setValue("birth_date", iso, {
+      shouldValidate: !!iso,
+      shouldDirty: true,
+      shouldTouch: true,
+    });
+    return iso;
+  }
 
   function setBanner(raw: unknown, fallback: string) {
     setError(showFormError(raw, fallback));
@@ -206,7 +220,12 @@ export function StudentForm({
     setSubmitting(true);
     setError(null);
     setMatchOk(false);
+    const birth_date = birthIsoFromSelects() || data.birth_date;
+    const payload = { ...data, birth_date };
     try {
+      if (!birth_date) {
+        throw new Error("Birth date: pick day, month and year");
+      }
       if (!student && !projectId) {
         throw new Error("Missing project — use your invite link");
       }
@@ -214,7 +233,7 @@ export function StudentForm({
         throw new Error("Please upload the front of your ID");
       }
       if (
-        data.document_type === "id_card" &&
+        payload.document_type === "id_card" &&
         !student?.id_back_path &&
         !backFile
       ) {
@@ -224,7 +243,9 @@ export function StudentForm({
       const form = new FormData();
       form.set(
         "data",
-        JSON.stringify(student ? data : { ...data, project_id: projectId }),
+        JSON.stringify(
+          student ? payload : { ...payload, project_id: projectId },
+        ),
       );
       if (frontFile) form.set("id_front", frontFile);
       if (backFile) form.set("id_back", backFile);
@@ -378,7 +399,25 @@ export function StudentForm({
 
       <form
         noValidate
-        onSubmit={handleSubmit(onSubmit, onInvalid)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const iso = syncBirthDate();
+          if (!iso) {
+            setFieldError("birth_date", {
+              type: "manual",
+              message: "Pick day, month and year",
+            });
+            setBanner(
+              "Please fix:\nBirth date: pick day, month and year",
+              "Please fix birth date",
+            );
+            document
+              .getElementById("birth-date-year")
+              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+          void handleSubmit(onSubmit, onInvalid)(e);
+        }}
         className="space-y-6"
       >
         <section className="space-y-4">
@@ -428,16 +467,24 @@ export function StudentForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Birth date"
-              hint="Stored as YYYY-MM-DD. Pick day, month and year (no typing)."
+              hint="Choose day, month and year from the lists (saved as YYYY-MM-DD)."
               error={errors.birth_date?.message}
             >
-              <input type="hidden" {...register("birth_date")} />
               <div className="grid grid-cols-3 gap-2">
                 <select
                   id="birth-date-day"
                   className="input"
                   value={birthD}
-                  onChange={(e) => setBirthD(e.target.value)}
+                  onChange={(e) => {
+                    setBirthD(e.target.value);
+                    const d = e.target.value;
+                    if (birthY && birthM && d) {
+                      setValue("birth_date", `${birthY}-${birthM}-${d}`, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
                   aria-label="Day of birth"
                 >
                   <option value="">Day</option>
@@ -451,7 +498,16 @@ export function StudentForm({
                   id="birth-date-month"
                   className="input"
                   value={birthM}
-                  onChange={(e) => setBirthM(e.target.value)}
+                  onChange={(e) => {
+                    setBirthM(e.target.value);
+                    const m = e.target.value;
+                    if (birthY && m && birthD) {
+                      setValue("birth_date", `${birthY}-${m}-${birthD}`, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
                   aria-label="Month of birth"
                 >
                   <option value="">Month</option>
@@ -465,7 +521,16 @@ export function StudentForm({
                   id="birth-date-year"
                   className="input"
                   value={birthY}
-                  onChange={(e) => setBirthY(e.target.value)}
+                  onChange={(e) => {
+                    setBirthY(e.target.value);
+                    const y = e.target.value;
+                    if (y && birthM && birthD) {
+                      setValue("birth_date", `${y}-${birthM}-${birthD}`, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
                   aria-label="Year of birth"
                 >
                   <option value="">Year</option>
@@ -476,9 +541,9 @@ export function StudentForm({
                   ))}
                 </select>
               </div>
-              {birthY && birthM && birthD && (
+              {birthIsoFromSelects() && (
                 <p className="mt-1 text-xs text-[var(--mint-text)]">
-                  = {birthY}-{birthM}-{birthD}
+                  Selected: {birthIsoFromSelects()}
                 </p>
               )}
             </Field>
