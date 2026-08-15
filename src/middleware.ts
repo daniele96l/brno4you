@@ -4,7 +4,11 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+  const isAdminArea =
+    pathname === "/admin" || pathname.startsWith("/admin/");
+  const isLogin = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+
+  if (isAdminArea && !isLogin) {
     const token = req.cookies.get("brno4you_admin")?.value;
     if (!token) {
       const url = req.nextUrl.clone();
@@ -17,5 +21,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin", "/admin/:path*"],
 };

@@ -7,6 +7,8 @@ const ADMIN_COOKIE = "brno4you_admin";
 const STUDENT_COOKIE = "brno4you_student";
 const SESSION_TTL_SEC = 60 * 60 * 24 * 7;
 
+export { ADMIN_COOKIE, STUDENT_COOKIE, SESSION_TTL_SEC };
+
 export function hashToken(token: string) {
   const secret = process.env.SESSION_SECRET || "dev-secret";
   return createHash("sha256").update(`${secret}:${token}`).digest("hex");
@@ -19,7 +21,8 @@ export function safeEqual(a: string, b: string) {
   return timingSafeEqual(ba, bb);
 }
 
-export async function createAdminSession() {
+/** Create session row and return raw token (caller sets cookie on the response). */
+export async function createAdminSessionToken() {
   const token = nanoid(32);
   const expires = new Date(Date.now() + SESSION_TTL_SEC * 1000).toISOString();
   await rpc("brno4you_put_session", {
@@ -28,6 +31,11 @@ export async function createAdminSession() {
     p_student_id: null,
     p_expires_at: expires,
   });
+  return token;
+}
+
+export async function createAdminSession() {
+  const token = await createAdminSessionToken();
   const jar = await cookies();
   jar.set(ADMIN_COOKIE, token, {
     httpOnly: true,
@@ -97,7 +105,14 @@ export async function canAccessStudent(studentId: string): Promise<boolean> {
 }
 
 export function checkAdminPassword(password: string) {
-  const expected = process.env.ADMIN_PASSWORD || "change-me";
+  let expected = process.env.ADMIN_PASSWORD || "change-me";
+  // Tolerate accidental quotes in env values
+  if (
+    (expected.startsWith('"') && expected.endsWith('"')) ||
+    (expected.startsWith("'") && expected.endsWith("'"))
+  ) {
+    expected = expected.slice(1, -1);
+  }
   return safeEqual(password, expected);
 }
 
