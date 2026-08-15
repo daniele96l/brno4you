@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { normalizeEmail, normalizePhone } from "@/lib/ios-form";
+
+/** After normalizeEmail — no spaces/invisible/fullwidth lookalikes left. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const studentFormSchema = z
   .object({
@@ -16,12 +20,17 @@ export const studentFormSchema = z
     nationality: z.string().trim().min(1, "required"),
     email: z
       .string()
-      .trim()
-      .min(1, "required")
-      .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-        message: "format",
-      }),
-    phone: z.string().trim().min(5, "too_short"),
+      .transform((v) => normalizeEmail(v))
+      .pipe(
+        z
+          .string()
+          .min(1, "required")
+          .refine((v) => EMAIL_RE.test(v), { message: "format" }),
+      ),
+    phone: z
+      .string()
+      .transform((v) => normalizePhone(v))
+      .pipe(z.string().trim().min(5, "too_short")),
     document_type: z.enum(["id_card", "passport"], {
       error: "required",
     }),

@@ -13,13 +13,23 @@ export function readSelectById(id: string): string {
   return el?.value?.trim() ?? "";
 }
 
-/** Strip iOS autofill junk; keep a usable email/phone. */
+/** Strip iOS autofill junk (ZW, NBSP, fullwidth @/.) before validate. */
 export function normalizeEmail(raw: string): string {
-  return raw.replace(/[\u200B-\u200D\uFEFF]/g, "").trim().toLowerCase();
+  return raw
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF\u00AD\u2060]/g, "")
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 export function normalizePhone(raw: string): string {
-  return raw.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  return raw
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF\u00AD\u2060]/g, "")
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ")
+    .trim();
 }
 
 /**

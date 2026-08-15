@@ -218,8 +218,8 @@ export function StudentForm({
       surname: pick("surname") || getValues("surname"),
       second_surname: pick("second_surname") || getValues("second_surname"),
       nationality: pick("nationality") || getValues("nationality"),
-      email: pick("email") || getValues("email"),
-      phone: pick("phone") || getValues("phone"),
+      email: pick("email") || normalizeEmail(getValues("email") || ""),
+      phone: pick("phone") || normalizePhone(getValues("phone") || ""),
       document_number: pick("document_number") || getValues("document_number"),
       document_country: pick("document_country") || getValues("document_country"),
       birth_date: iso || getValues("birth_date"),
@@ -232,6 +232,20 @@ export function StudentForm({
       has_second_name: getValues("has_second_name"),
       has_second_surname: getValues("has_second_surname"),
     };
+
+    // Keep DOM value identical to what we validate (strip autofill junk in-place)
+    const emailEl = document.querySelector<HTMLInputElement>(
+      'input[name="email"]',
+    );
+    if (emailEl && next.email && emailEl.value !== next.email) {
+      emailEl.value = next.email;
+    }
+    const phoneEl = document.querySelector<HTMLInputElement>(
+      'input[name="phone"]',
+    );
+    if (phoneEl && next.phone && phoneEl.value !== next.phone) {
+      phoneEl.value = next.phone;
+    }
 
     for (const [key, value] of Object.entries(next)) {
       setValue(key as keyof StudentFormInput, value as never, {
@@ -317,17 +331,11 @@ export function StudentForm({
       return;
     }
 
-    // Absolute last resort — still name something actionable
-    publishMistakes([
-      {
-        field: "email",
-        message: formatFieldMistake(
-          "email",
-          readInputValue("email") || "(empty)",
-        ),
-        focusId: "email",
-      },
-    ]);
+    // Do not blame email when the real failure is unknown / scrubbed Safari noise
+    setError(
+      "Could not save — check birth date, phone, and ID photos, then try again.",
+    );
+    setErrorFocusId("birth-date-day");
   }
 
   function focusMistake(focusId: string) {
@@ -432,6 +440,10 @@ export function StudentForm({
           actual =
             birthIsoFromSelects() ||
             `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`;
+        } else if (field === "email") {
+          actual = normalizeEmail(String(actual ?? ""));
+        } else if (field === "phone") {
+          actual = normalizePhone(String(actual ?? ""));
         }
         mistakes.push({
           field,
@@ -599,15 +611,14 @@ export function StudentForm({
           publishMistakes(scanned);
           return;
         }
-        setError(
-          scrubPatternNoise(
-            showFormError(
-              json.error,
-              `Save failed\nServer said: ${isBrowserPatternNoise(serverMsg) ? "please check the fields below" : serverMsg || "(no details)"}`,
-            ),
-          ) ||
-            formatFieldMistake("email", readInputValue("email") || "(empty)"),
+        const explained = scrubPatternNoise(
+          showFormError(
+            json.error,
+            `Save failed\nServer said: ${isBrowserPatternNoise(serverMsg) ? "please check the fields below" : serverMsg || "(no details)"}`,
+          ),
         );
+        if (explained) setError(explained);
+        else setBanner(null, "Save failed — please check the highlighted fields");
         return;
       }
 
