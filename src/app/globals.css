@@ -22,11 +22,22 @@
   --font-sans: var(--font-brand);
 }
 
+html {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  max-width: 100%;
+}
+
 body {
   color: var(--ink);
   font-family: var(--font-brand), "Helvetica Neue", sans-serif;
   background: #ffffff;
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+  position: relative;
 }
 
 @keyframes float-slow {

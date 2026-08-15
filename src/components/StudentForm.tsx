@@ -695,7 +695,7 @@ export function StudentForm({
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="form-error-title"
-            className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            className="max-h-[80vh] w-full max-w-md overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-2xl bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2

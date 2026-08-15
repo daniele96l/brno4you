@@ -18,8 +18,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${brand.variable} h-full`}>
-      <body className="min-h-full flex flex-col antialiased">
+    <html
+      lang="en"
+      className={`${brand.variable} h-full overflow-x-hidden`}
+    >
+      <body className="min-h-full flex max-w-[100vw] flex-col overflow-x-hidden antialiased">
         <header className="site-header">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
             <Link href="/" className="logo-stack text-white">
@@ -44,7 +47,9 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
-        <main className="relative flex-1 overflow-hidden">{children}</main>
+        <main className="relative w-full max-w-[100vw] flex-1 overflow-x-hidden">
+          {children}
+        </main>
         <footer className="border-t border-[var(--line)] bg-white">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm text-[var(--muted)] sm:px-6">
             <p>Brno for you · Erasmus student portal</p>
