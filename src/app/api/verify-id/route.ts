@@ -3,8 +3,25 @@ import { canAccessStudent } from "@/lib/auth";
 import { getStudent, saveStudent } from "@/lib/students";
 import { readUpload } from "@/lib/storage";
 import { compareStudentToExtracted, extractIdData } from "@/lib/verify-id";
+import { ensureStudentDocuments } from "@/lib/documents/ensure";
 
 export const runtime = "nodejs";
+
+async function ensureDocsSafe(studentId: string) {
+  try {
+    const student = await getStudent(studentId);
+    if (!student) return;
+    if (
+      student.id_verification_status !== "matched" &&
+      student.id_verification_status !== "mismatch_dismissed"
+    ) {
+      return;
+    }
+    await ensureStudentDocuments(student);
+  } catch {
+    // Non-fatal: participant UI can retry via POST /documents
+  }
+}
 
 export async function POST(req: Request) {
   let studentId: string | undefined;
@@ -34,11 +51,14 @@ export async function POST(req: Request) {
       (student.id_verification_status === "matched" ||
         student.id_verification_status === "mismatch_dismissed")
     ) {
+      await ensureDocsSafe(studentId);
+      const refreshed = await getStudent(studentId);
       return NextResponse.json({
         status: student.id_verification_status,
         mismatches: student.id_mismatches || [],
         extracted: student.id_extracted,
         skipped: true,
+        student: refreshed || student,
       });
     }
 
@@ -58,12 +78,17 @@ export async function POST(req: Request) {
     student.updated_at = student.id_verified_at;
     await saveStudent(student);
 
+    if (mismatches.length === 0) {
+      await ensureDocsSafe(studentId);
+    }
+
+    const refreshed = await getStudent(studentId);
     return NextResponse.json({
       status: mismatches.length === 0 ? "matched" : "mismatch",
       mismatches,
       extracted,
       skipped: false,
-      student,
+      student: refreshed || student,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Verification failed";

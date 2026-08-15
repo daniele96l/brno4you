@@ -16,8 +16,8 @@ type Props = {
   preselectedId?: string;
 };
 
+/** Admin view-only document status (PDFs auto-generated after ID verify). */
 export function GenerateDocumentForm({
-  studentId,
   templates,
   initialDocuments,
   preselectedId,
@@ -31,37 +31,19 @@ export function GenerateDocumentForm({
       ? preselectedId
       : studentTemplates[0]?.id || "",
   );
-  const [documents, setDocuments] = useState(initialDocuments);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [documents] = useState(initialDocuments);
 
   const selected = studentTemplates.find((t) => t.id === selectedId);
   const existing = documents.find((d) => d.template_id === selectedId);
 
-  async function generate() {
-    if (!selectedId) return;
-    setLoading(true);
-    setError(null);
-    const res = await fetch("/api/documents/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, templateId: selectedId }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(json.error || "Generation failed");
-      return;
-    }
-    setDocuments(json.documents);
-  }
-
   return (
     <div className="space-y-5 text-sm">
+      <p className="text-[var(--mint-text)]">
+        Documents are created automatically after the participant verifies their
+        ID. Preview or download below — no admin generate step.
+      </p>
       <div>
-        <p className="mb-2 font-semibold text-[var(--navy)]">
-          Select one document
-        </p>
+        <p className="mb-2 font-semibold text-[var(--navy)]">Documents</p>
         <div className="grid gap-2 sm:grid-cols-2">
           {studentTemplates.map((t) => {
             const done = documents.some((d) => d.template_id === t.id);
@@ -83,7 +65,7 @@ export function GenerateDocumentForm({
                 <div
                   className={`mt-1 text-xs ${selectedId === t.id ? "text-white/80" : "text-[var(--mint-text)]"}`}
                 >
-                  {signed ? "Signed" : done ? "Generated" : "Not generated yet"}
+                  {signed ? "Signed" : done ? "Generated" : "Waiting for ID verify"}
                 </div>
               </button>
             );
@@ -98,37 +80,25 @@ export function GenerateDocumentForm({
             {existing?.status === "signed"
               ? `Signed ${existing.signed_at ? new Date(existing.signed_at).toLocaleString() : ""} by ${existing.signer_name || "participant"}`
               : existing
-                ? `Last generated ${new Date(existing.created_at).toLocaleString()}`
-                : "Ready to generate for this student."}
+                ? `Generated ${new Date(existing.created_at).toLocaleString()}`
+                : "Not generated yet — created after ID verification."}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={loading || existing?.status === "signed"}
-              onClick={generate}
-            >
-              {loading
-                ? "Generating…"
-                : existing
-                  ? "Regenerate PDF"
-                  : "Generate PDF"}
-            </button>
-            {existing && (
+          {existing && (
+            <div className="mt-3">
               <a
                 className="btn-secondary"
                 href={`/api/documents/${existing.id}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                Review PDF
+                {existing.status === "signed"
+                  ? "Download signed PDF"
+                  : "Preview PDF"}
               </a>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
-
-      {error && <p className="text-red-600">{error}</p>}
 
       <div>
         <h3 className="mb-2 font-semibold text-[var(--navy)]">
@@ -136,7 +106,9 @@ export function GenerateDocumentForm({
         </h3>
         <ul className="space-y-2">
           {documents.length === 0 && (
-            <li className="text-[var(--muted)]">No documents generated yet.</li>
+            <li className="text-[var(--muted)]">
+              No documents yet. They appear after ID verification.
+            </li>
           )}
           {documents.map((d) => (
             <li

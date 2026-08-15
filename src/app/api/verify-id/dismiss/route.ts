@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
 import { getStudent, saveStudent } from "@/lib/students";
+import { ensureStudentDocuments } from "@/lib/documents/ensure";
 
 export const runtime = "nodejs";
 
@@ -22,5 +23,12 @@ export async function POST(req: Request) {
   student.updated_at = new Date().toISOString();
   await saveStudent(student);
 
-  return NextResponse.json({ student });
+  try {
+    await ensureStudentDocuments(student);
+  } catch {
+    // Non-fatal
+  }
+
+  const refreshed = await getStudent(body.studentId);
+  return NextResponse.json({ student: refreshed || student });
 }

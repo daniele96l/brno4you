@@ -469,23 +469,21 @@ export function ProjectDashboard({
                         </td>
                         <td className="py-3">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              disabled={loading || doc?.status === "signed"}
-                              onClick={() => generate(s.id, docTemplateId)}
-                            >
-                              {doc ? "Regenerate" : "Generate"}
-                            </button>
-                            {doc && (
+                            {doc ? (
                               <a
                                 className="btn-secondary"
                                 href={`/api/documents/${doc.id}`}
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                Review
+                                {doc.status === "signed"
+                                  ? "Download signed"
+                                  : "Preview"}
                               </a>
+                            ) : (
+                              <span className="text-xs text-[var(--muted)]">
+                                Auto-generated after ID verify
+                              </span>
                             )}
                           </div>
                         </td>

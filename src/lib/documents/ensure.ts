@@ -1,10 +1,6 @@
 import { randomId } from "@/lib/auth";
 import { generateFromDbTemplate } from "@/lib/documents/registry";
-import {
-  availableStudentTemplateIds,
-  getProject,
-  requiredStudentTemplateIds,
-} from "@/lib/projects";
+import { getProject, signableStudentTemplateIds } from "@/lib/projects";
 import { listStudentDocuments, saveDocument } from "@/lib/students";
 import type { GeneratedDocument, Student } from "@/lib/types";
 import { saveUpload } from "@/lib/storage";
@@ -16,12 +12,7 @@ export async function ensureStudentDocuments(
   const project = await getProject(student.project_id);
   if (!project) throw new Error("Project not found");
 
-  const toPrepare = new Set([
-    ...availableStudentTemplateIds(project),
-    ...requiredStudentTemplateIds(project, student),
-    "travel_tickets_declaration",
-  ]);
-
+  const toPrepare = signableStudentTemplateIds(project, student);
   const existing = await listStudentDocuments(student.id);
   const byTemplate = new Map(existing.map((d) => [d.template_id, d]));
 

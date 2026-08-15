@@ -4,6 +4,7 @@ import { listAllDocuments, listStudents } from "@/lib/students";
 import { listPartners, ensureSampleDataSeeded } from "@/lib/partners";
 import { getProject, listProjects } from "@/lib/projects";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
+import { ensureStudentDocuments } from "@/lib/documents/ensure";
 import { listDocTemplates } from "@/lib/documents/templates";
 import { ProjectDashboard } from "./ProjectDashboard";
 
@@ -25,7 +26,7 @@ export default async function AdminProjectPage({ params, searchParams }: Props) 
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [students, partners, templates, documents, allProjects] =
+  let [students, partners, templates, documents, allProjects] =
     await Promise.all([
       listStudents(id),
       listPartners(id),
@@ -33,6 +34,18 @@ export default async function AdminProjectPage({ params, searchParams }: Props) 
       listAllDocuments(),
       listProjects(),
     ]);
+
+  // Backfill PDFs for already-verified participants (no admin Generate)
+  await Promise.all(
+    students
+      .filter(
+        (s) =>
+          s.id_verification_status === "matched" ||
+          s.id_verification_status === "mismatch_dismissed",
+      )
+      .map((s) => ensureStudentDocuments(s).catch(() => null)),
+  );
+  documents = await listAllDocuments();
 
   const initialTab =
     tab === "partners" ||

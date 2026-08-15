@@ -9,6 +9,7 @@ import {
   projectTypeLabel,
   projectTypeShort,
   requiredStudentTemplateIds,
+  signableStudentTemplateIds,
 } from "./project-packs";
 
 export type { MobilityProject, ProjectType };

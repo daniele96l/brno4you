@@ -3,27 +3,15 @@ import { canAccessStudent } from "@/lib/auth";
 import { ensureStudentDocuments } from "@/lib/documents/ensure";
 import { getStudent, listStudentDocuments } from "@/lib/students";
 import {
-  availableStudentTemplateIds,
   getProject,
   requiredStudentTemplateIds,
+  signableStudentTemplateIds,
 } from "@/lib/projects";
 import { listDocTemplates } from "@/lib/documents/templates";
-import type { MobilityProject } from "@/lib/project-packs";
-import type { Student } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-function signableIdsFor(project: MobilityProject, student: Student) {
-  return Array.from(
-    new Set([
-      ...availableStudentTemplateIds(project),
-      ...requiredStudentTemplateIds(project, student),
-      "travel_tickets_declaration",
-    ]),
-  );
-}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -43,7 +31,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     ? requiredStudentTemplateIds(project, student)
     : [];
   const signableTemplateIds = project
-    ? signableIdsFor(project, student)
+    ? signableStudentTemplateIds(project, student)
     : [];
   const templates = await listDocTemplates();
 
@@ -92,7 +80,7 @@ export async function POST(_req: Request, ctx: Ctx) {
         ? requiredStudentTemplateIds(project, student)
         : [],
       signableTemplateIds: project
-        ? signableIdsFor(project, student)
+        ? signableStudentTemplateIds(project, student)
         : [],
     });
   } catch (e) {
