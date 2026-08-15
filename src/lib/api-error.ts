@@ -118,7 +118,7 @@ export function explainApiError(
 
   if (typeof error === "string") {
     if (
-      /did not match the expected pattern|match the expected pattern|must match pattern|invalid string/i.test(
+      /did not match.*pattern|match the (expected )?pattern|must match pattern|invalid string/i.test(
         error,
       )
     ) {

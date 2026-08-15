@@ -24,7 +24,7 @@ import type { FieldMismatch, Student } from "@/lib/types";
 import { ParticipantDocuments } from "@/components/ParticipantDocuments";
 import { DocumentsToSignPreview } from "@/components/DocumentsToSignPreview";
 import type { ProjectType } from "@/lib/project-packs";
-import type { FieldErrors, FieldPath } from "react-hook-form";
+import type { FieldPath } from "react-hook-form";
 
 type Props = {
   initial?: Student | null;
@@ -51,6 +51,30 @@ type FieldMistake = {
   message: string;
   focusId: string;
 };
+
+function isBrowserPatternNoise(text: string): boolean {
+  return /did not match.*pattern|match the (expected )?pattern|must match pattern|invalid string: must match/i.test(
+    text,
+  );
+}
+
+/** Strip Safari/WebKit pattern-validation noise from any user-facing error text. */
+function scrubPatternNoise(text: string): string {
+  if (!text) return "";
+  const lines = text.split(/\r?\n/);
+  const kept = lines.filter((line) => {
+    const t = line.trim();
+    if (!t) return true;
+    if (/^Details:\s*/i.test(t) && /pattern/i.test(t)) return false;
+    if (/Details:\s*.*pattern/i.test(t)) return false;
+    if (isBrowserPatternNoise(t)) return false;
+    return true;
+  });
+  const result = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!result || isBrowserPatternNoise(result)) return "";
+  if (/Details:\s*.*pattern/i.test(result)) return "";
+  return result;
+}
 
 function splitIsoDate(iso: string): { y: string; m: string; d: string } {
   const n = normalizeDate(iso);
@@ -123,7 +147,6 @@ export function StudentForm({
 
   const {
     register,
-    handleSubmit,
     watch,
     setValue,
     setError: setFieldError,
@@ -229,77 +252,82 @@ export function StudentForm({
   }
 
   function setBanner(raw: unknown, fallback: string) {
-    const text =
+    const text = scrubPatternNoise(
       typeof raw === "string"
         ? raw
         : raw instanceof Error
           ? raw.message
-          : "";
-    // Pattern / vague format errors → find the real field and scroll to it
-    if (
-      !text ||
-      /format check|wrong format|did not match|expected pattern|must match|invalid string|A field/i.test(
-        text,
-      )
-    ) {
-      const scanned = collectMistakes();
-      if (scanned.length) {
-        publishMistakes(scanned);
-        return;
-      }
-      const invalid = document.querySelector<
-        HTMLInputElement | HTMLSelectElement
-      >("form input:invalid, form select:invalid, form :invalid");
-      const name =
-        invalid?.getAttribute("name") ||
-        invalid?.id?.replace(/^birth-date-/, "birth_date") ||
-        "";
-      if (name === "birth-date-day" || name === "birth-date-month" || name === "birth-date-year" || name.includes("birth")) {
-        publishMistakes([
-          {
-            field: "birth_date",
-            message: formatFieldMistake(
-              "birth_date",
-              birthIsoFromSelects() ||
-                `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`,
-            ),
-            focusId: "birth-date-day",
-          },
-        ]);
-        return;
-      }
-      if (name && STUDENT_FIELD_LABELS[name]) {
-        publishMistakes([
-          {
-            field: name,
-            message: formatFieldMistake(
-              name,
-              (invalid as HTMLInputElement | null)?.value,
-            ),
-            focusId: name === "birth_date" ? "birth-date-day" : name,
-          },
-        ]);
-        return;
-      }
-    }
-    const explained = showFormError(raw, fallback);
-    if (
-      explained &&
-      !/format check|A field failed|A field has the wrong format/i.test(
-        explained,
-      )
-    ) {
-      setError(explained);
-      setErrorFocusId(null);
-      return;
-    }
-    const scanned = collectMistakes();
+          : "",
+    );
+    const safeFallback = scrubPatternNoise(fallback) || "";
+
+    // Always try to name a real field first — never show Safari pattern noise
+    const scanned = collectMistakes(syncAllFieldsFromDom());
     if (scanned.length) {
       publishMistakes(scanned);
       return;
     }
-    setError(fallback);
-    setErrorFocusId(null);
+
+    if (text && !isBrowserPatternNoise(text)) {
+      const explained = showFormError(text, safeFallback || text);
+      const clean = scrubPatternNoise(explained);
+      if (clean) {
+        setError(clean);
+        setErrorFocusId(null);
+        return;
+      }
+    }
+
+    // Find whichever DOM control Safari marked invalid
+    const invalid = document.querySelector<
+      HTMLInputElement | HTMLSelectElement
+    >("form input:invalid, form select:invalid, form :invalid");
+    if (invalid) {
+      const name =
+        invalid.getAttribute("name") ||
+        (invalid.id?.startsWith("birth-date") ? "birth_date" : "") ||
+        invalid.id ||
+        "";
+      const field =
+        name.startsWith("birth-date") || name === "birth_date"
+          ? "birth_date"
+          : name;
+      if (field && (STUDENT_FIELD_LABELS[field] || field === "birth_date")) {
+        publishMistakes([
+          {
+            field,
+            message: formatFieldMistake(
+              field,
+              field === "birth_date"
+                ? birthIsoFromSelects() ||
+                    `day=${readSelectById("birth-date-day") || "?"} month=${readSelectById("birth-date-month") || "?"} year=${readSelectById("birth-date-year") || "?"}`
+                : invalid.value,
+            ),
+            focusId:
+              field === "birth_date" ? "birth-date-day" : field || invalid.id,
+          },
+        ]);
+        return;
+      }
+    }
+
+    if (safeFallback) {
+      setError(safeFallback);
+      setErrorFocusId(null);
+      return;
+    }
+
+    // Absolute last resort — still name something actionable
+    publishMistakes([
+      {
+        field: "email",
+        message: formatFieldMistake(
+          "email",
+          readInputValue("email") || "(empty)",
+        ),
+        focusId: "email",
+      },
+    ]);
   }
 
   function focusMistake(focusId: string) {
@@ -322,28 +350,50 @@ export function StudentForm({
     if (!mistakes.length) return;
     setFrontError(null);
     setBackError(null);
+    const safe: FieldMistake[] = [];
     for (const m of mistakes) {
+      let message = m.message;
+      if (
+        !message ||
+        isBrowserPatternNoise(message) ||
+        /Details:\s*.*pattern/i.test(message)
+      ) {
+        const actual =
+          m.field === "birth_date"
+            ? birthIsoFromSelects() || "(incomplete)"
+            : readInputValue(m.field) ||
+              String(
+                getValues(m.field as keyof StudentFormInput) ?? "",
+              ) ||
+              "(empty)";
+        message = formatFieldMistake(m.field, actual);
+      } else {
+        message = scrubPatternNoise(message) || formatFieldMistake(m.field, "(?)");
+      }
+      safe.push({ ...m, message });
       if (m.field === "id_front") {
-        setFrontError(m.message);
+        setFrontError(message);
         continue;
       }
       if (m.field === "id_back") {
-        setBackError(m.message);
+        setBackError(message);
         continue;
       }
       if (m.field in STUDENT_FIELD_LABELS || m.field in getValues()) {
         try {
           setFieldError(m.field as FieldPath<StudentFormInput>, {
             type: "manual",
-            message: m.message,
+            message,
           });
         } catch {
           /* non-form field */
         }
       }
     }
-    setError(mistakes.map((m) => m.message).join("\n\n"));
-    setErrorFocusId(mistakes[0]?.focusId ?? null);
+    const banner = scrubPatternNoise(safe.map((m) => m.message).join("\n\n"));
+    if (!banner) return;
+    setError(banner);
+    setErrorFocusId(safe[0]?.focusId ?? null);
   }
 
   function dismissErrorPopup() {
@@ -469,7 +519,9 @@ export function StudentForm({
       }
       if (!student && !projectId) {
         setError(
-          "Invite link\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
+          scrubPatternNoise(
+            "Invite link\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
+          ) || null,
         );
         return;
       }
@@ -500,11 +552,17 @@ export function StudentForm({
       if (!res.ok) {
         applyServerFieldErrors(json.error);
         if (typeof json.error === "object") {
-          const msg = formatStudentValidationError(json.error, {
-            ...getValues(),
-            birth_date: birthIsoFromSelects() || getValues("birth_date"),
-          });
-          setError(msg);
+          const msg = scrubPatternNoise(
+            formatStudentValidationError(json.error, {
+              ...getValues(),
+              birth_date: birthIsoFromSelects() || getValues("birth_date"),
+            }),
+          );
+          if (msg) setError(msg);
+          else {
+            const scanned = collectMistakes(payload);
+            if (scanned.length) publishMistakes(scanned);
+          }
           return;
         }
         // Server string errors for uploads etc.
@@ -542,10 +600,13 @@ export function StudentForm({
           return;
         }
         setError(
-          showFormError(
-            json.error,
-            `Save failed\nServer said: ${serverMsg || "(no details)"}`,
-          ),
+          scrubPatternNoise(
+            showFormError(
+              json.error,
+              `Save failed\nServer said: ${isBrowserPatternNoise(serverMsg) ? "please check the fields below" : serverMsg || "(no details)"}`,
+            ),
+          ) ||
+            formatFieldMistake("email", readInputValue("email") || "(empty)"),
         );
         return;
       }
@@ -556,16 +617,26 @@ export function StudentForm({
       }
       await verify(json.student.id, true);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (isBrowserPatternNoise(msg)) {
+        const scanned = collectMistakes(syncAllFieldsFromDom());
+        if (scanned.length) {
+          publishMistakes(scanned);
+          return;
+        }
+        setBanner(null, "");
+        return;
+      }
       const scanned = collectMistakes(payload);
       if (scanned.length) {
         publishMistakes(scanned);
         return;
       }
       setBanner(
-        e instanceof Error ? e.message : null,
-        e instanceof Error
-          ? `Save failed\nDetails: ${e.message}`
-          : "Save failed\nDetails: unknown error",
+        scrubPatternNoise(msg) || null,
+        scrubPatternNoise(msg)
+          ? `Save failed\nDetails: ${scrubPatternNoise(msg)}`
+          : "Save failed — please check the highlighted fields",
       );
     } finally {
       setSubmitting(false);
@@ -582,10 +653,11 @@ export function StudentForm({
     const mistakes: FieldMistake[] = [];
     for (const [field, msgs] of Object.entries(fieldErrors)) {
       if (!msgs?.length) continue;
+      const hint = msgs[0];
       const message = formatFieldMistake(
         field,
         values[field as keyof StudentFormInput],
-        msgs[0],
+        isBrowserPatternNoise(hint || "") ? undefined : hint,
       );
       mistakes.push({
         field,
@@ -594,43 +666,6 @@ export function StudentForm({
       });
     }
     if (mistakes.length) publishMistakes(mistakes);
-  }
-
-  function onInvalid(errs: FieldErrors<StudentFormInput>) {
-    const fromSchema = collectMistakes();
-    if (fromSchema.length) {
-      publishMistakes(fromSchema);
-      return;
-    }
-    // Fallback from RHF errs only
-    const values = getValues();
-    const mistakes: FieldMistake[] = [];
-    for (const field of Object.keys(errs) as (keyof StudentFormInput)[]) {
-      const err = errs[field];
-      if (!err || typeof err !== "object" || !("message" in err) || !err.message) {
-        continue;
-      }
-      let actual: unknown = values[field];
-      if (field === "birth_date") {
-        actual =
-          birthIsoFromSelects() ||
-          `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`;
-      }
-      mistakes.push({
-        field: String(field),
-        message: formatFieldMistake(String(field), actual, String(err.message)),
-        focusId: field === "birth_date" ? "birth-date-day" : String(field),
-      });
-    }
-    if (mistakes.length) publishMistakes(mistakes);
-  }
-
-  function scrollToField(field: string) {
-    const el = document.querySelector<HTMLElement>(
-      `input[name="${field}"], select[name="${field}"]`,
-    );
-    el?.focus();
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function dismissMismatch() {
@@ -720,8 +755,38 @@ export function StudentForm({
 
       <form
         noValidate
+        action="#"
+        onInvalid={(e) => {
+          // Block Safari’s native “string did not match the pattern” bubble
+          e.preventDefault();
+          const t = e.target as HTMLInputElement | HTMLSelectElement;
+          const name =
+            t.getAttribute("name") ||
+            (t.id?.startsWith("birth-date") ? "birth_date" : t.id) ||
+            "";
+          const field = name.startsWith("birth-date") ? "birth_date" : name;
+          if (field && STUDENT_FIELD_LABELS[field]) {
+            publishMistakes([
+              {
+                field,
+                message: formatFieldMistake(
+                  field,
+                  field === "birth_date"
+                    ? birthIsoFromSelects() || "(incomplete)"
+                    : t.value,
+                ),
+                focusId:
+                  field === "birth_date" ? "birth-date-day" : field || t.id,
+              },
+            ]);
+            return;
+          }
+          const scanned = collectMistakes(syncAllFieldsFromDom());
+          if (scanned.length) publishMistakes(scanned);
+        }}
         onSubmit={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           // Critical on iPhone: autofill is in the DOM, not always in React state
           const synced = syncAllFieldsFromDom();
           const mistakes = collectMistakes(synced);
@@ -729,10 +794,8 @@ export function StudentForm({
             publishMistakes(mistakes);
             return;
           }
-          void handleSubmit(
-            (data) => onSubmit({ ...data, ...synced }),
-            onInvalid,
-          )(e);
+          // Skip RHF handleSubmit — it can trip Safari native validation on iOS
+          void onSubmit(synced);
         }}
         className="space-y-6"
       >

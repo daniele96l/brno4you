@@ -132,7 +132,7 @@ export function formatStudentValidationError(
         /* fall through */
       }
     }
-    if (/did not match the expected pattern|match the expected pattern|must match pattern|invalid string/i.test(error)) {
+    if (/did not match.*pattern|match the (expected )?pattern|must match pattern|invalid string/i.test(error)) {
       // Caller must resolve to a concrete field via collectMistakes — do not invent a vague banner.
       return "";
     }
@@ -149,7 +149,14 @@ export function formatStudentValidationError(
   const blocks: string[] = [];
 
   for (const msg of payload.formErrors || []) {
-    if (msg) blocks.push(msg);
+    if (
+      msg &&
+      !/did not match.*pattern|match the (expected )?pattern|must match pattern|invalid string/i.test(
+        msg,
+      )
+    ) {
+      blocks.push(msg);
+    }
   }
   for (const [field, msgs] of Object.entries(payload.fieldErrors || {})) {
     if (msgs?.length) {
