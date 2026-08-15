@@ -26,7 +26,7 @@ type Props = {
   projectType?: ProjectType;
 };
 
-/** Map raw/API/Safari errors to clear text — never merge birth date + email. */
+/** Map raw/API errors — never a vague “check email/phone/uploads” blob. */
 function showFormError(raw: unknown, fallback: string): string {
   if (raw == null || raw === "") return fallback;
   if (typeof raw === "object") {
@@ -34,36 +34,14 @@ function showFormError(raw: unknown, fallback: string): string {
   }
   const text = raw instanceof Error ? raw.message : String(raw);
   if (/THIS IS WRONG/i.test(text) || text.includes("You entered:")) return text;
-  if (/^the string did not match the expected pattern\.?$/i.test(text.trim())) {
-    const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(
-      "form :invalid",
-    );
-    const name = el?.getAttribute("name") || "";
-    if (name === "email") {
-      return formatFieldMistake(
-        "email",
-        (el as HTMLInputElement | null)?.value,
-      );
-    }
-    if (name === "birth_date") {
-      return formatFieldMistake(
-        "birth_date",
-        (el as HTMLInputElement | null)?.value,
-      );
-    }
-    if (name && STUDENT_FIELD_LABELS[name]) {
-      return formatFieldMistake(
-        name,
-        (el as HTMLInputElement | HTMLSelectElement | null)?.value,
-      );
-    }
-    return (
-      "A field failed a format check — THIS IS WRONG\n" +
-      "Check each red field below: every warning shows what you entered vs what is expected."
-    );
-  }
   return explainApiError(text, fallback);
 }
+
+type FieldMistake = {
+  field: string;
+  message: string;
+  focusId: string;
+};
 
 function splitIsoDate(iso: string): { y: string; m: string; d: string } {
   const n = normalizeDate(iso);
@@ -112,6 +90,8 @@ export function StudentForm({
   const router = useRouter();
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [frontError, setFrontError] = useState<string | null>(null);
+  const [backError, setBackError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +170,108 @@ export function StudentForm({
     setError(showFormError(raw, fallback));
   }
 
+  function focusMistake(focusId: string) {
+    const el =
+      document.getElementById(focusId) ||
+      document.querySelector<HTMLElement>(
+        `input[name="${focusId}"], select[name="${focusId}"], #${focusId}`,
+      );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (el && "focus" in el) {
+      try {
+        (el as HTMLElement).focus();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function publishMistakes(mistakes: FieldMistake[]) {
+    if (!mistakes.length) return;
+    setFrontError(null);
+    setBackError(null);
+    for (const m of mistakes) {
+      if (m.field === "id_front") {
+        setFrontError(m.message);
+        continue;
+      }
+      if (m.field === "id_back") {
+        setBackError(m.message);
+        continue;
+      }
+      if (m.field in STUDENT_FIELD_LABELS || m.field in getValues()) {
+        try {
+          setFieldError(m.field as FieldPath<StudentFormInput>, {
+            type: "manual",
+            message: m.message,
+          });
+        } catch {
+          /* non-form field */
+        }
+      }
+    }
+    setError(mistakes.map((m) => m.message).join("\n\n"));
+    focusMistake(mistakes[0]!.focusId);
+  }
+
+  /** Find every broken field with entered vs expected — no generic blobs. */
+  function collectMistakes(
+    valuesOverride?: Partial<StudentFormInput>,
+  ): FieldMistake[] {
+    const values = {
+      ...getValues(),
+      ...valuesOverride,
+      birth_date:
+        valuesOverride?.birth_date ||
+        birthIsoFromSelects() ||
+        getValues("birth_date"),
+    };
+    const mistakes: FieldMistake[] = [];
+    const parsed = studentFormSchema.safeParse(values);
+    if (!parsed.success) {
+      const seen = new Set<string>();
+      for (const issue of parsed.error.issues) {
+        const field = String(issue.path[0] || "");
+        if (!field || seen.has(field)) continue;
+        seen.add(field);
+        let actual: unknown = values[field as keyof StudentFormInput];
+        if (field === "birth_date") {
+          actual =
+            birthIsoFromSelects() ||
+            `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`;
+        }
+        mistakes.push({
+          field,
+          message: formatFieldMistake(field, actual, issue.message),
+          focusId: field === "birth_date" ? "birth-date-day" : field,
+        });
+      }
+    }
+
+    const needsFront = !student?.id_front_path && !frontFile;
+    if (needsFront) {
+      mistakes.push({
+        field: "id_front",
+        message: formatFieldMistake("id_front", "(no photo selected)"),
+        focusId: "id-front-input",
+      });
+    }
+    const needsBack =
+      (values.document_type === "id_card" ||
+        getValues("document_type") === "id_card") &&
+      !student?.id_back_path &&
+      !backFile;
+    if (needsBack) {
+      mistakes.push({
+        field: "id_back",
+        message: formatFieldMistake("id_back", "(no photo selected)"),
+        focusId: "id-back-input",
+      });
+    }
+
+    return mistakes;
+  }
+
   async function verify(studentId: string, force = false) {
     setVerifying(true);
     setError(null);
@@ -230,25 +312,22 @@ export function StudentForm({
   async function onSubmit(data: StudentFormInput) {
     setSubmitting(true);
     setError(null);
+    setFrontError(null);
+    setBackError(null);
     setMatchOk(false);
     const birth_date = birthIsoFromSelects() || data.birth_date;
     const payload = { ...data, birth_date };
     try {
-      if (!birth_date) {
-        throw new Error("Birth date: pick day, month and year");
+      const pre = collectMistakes(payload);
+      if (pre.length) {
+        publishMistakes(pre);
+        return;
       }
       if (!student && !projectId) {
-        throw new Error("Missing project — use your invite link");
-      }
-      if (!student && !frontFile) {
-        throw new Error("Please upload the front of your ID");
-      }
-      if (
-        payload.document_type === "id_card" &&
-        !student?.id_back_path &&
-        !backFile
-      ) {
-        throw new Error("Please upload the back of your ID card");
+        setError(
+          "Invite link — THIS IS WRONG\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
+        );
+        return;
       }
 
       const form = new FormData();
@@ -267,17 +346,52 @@ export function StudentForm({
       const json = await res.json();
       if (!res.ok) {
         applyServerFieldErrors(json.error);
-        throw new Error(
-          typeof json.error === "object"
-            ? formatStudentValidationError(json.error, {
-                ...getValues(),
-                birth_date: birthIsoFromSelects() || getValues("birth_date"),
-              })
-            : showFormError(
-                json.error,
-                "Could not save your application — check the fields below",
+        if (typeof json.error === "object") {
+          const msg = formatStudentValidationError(json.error, {
+            ...getValues(),
+            birth_date: birthIsoFromSelects() || getValues("birth_date"),
+          });
+          setError(msg);
+          return;
+        }
+        // Server string errors for uploads etc.
+        const serverMsg = String(json.error || "");
+        if (/front/i.test(serverMsg)) {
+          publishMistakes([
+            {
+              field: "id_front",
+              message: formatFieldMistake(
+                "id_front",
+                frontFile?.name || "(no photo)",
               ),
+              focusId: "id-front-input",
+            },
+          ]);
+          return;
+        }
+        if (/back/i.test(serverMsg)) {
+          publishMistakes([
+            {
+              field: "id_back",
+              message: formatFieldMistake(
+                "id_back",
+                backFile?.name || "(no photo)",
+              ),
+              focusId: "id-back-input",
+            },
+          ]);
+          return;
+        }
+        // Last resort: re-scan the form so we never show a vague blob
+        const scanned = collectMistakes(payload);
+        if (scanned.length) {
+          publishMistakes(scanned);
+          return;
+        }
+        setError(
+          showFormError(json.error, `Save failed — THIS IS WRONG\nServer said: ${serverMsg || "(no details)"}`),
         );
+        return;
       }
 
       setStudent(json.student);
@@ -286,9 +400,16 @@ export function StudentForm({
       }
       await verify(json.student.id, true);
     } catch (e) {
+      const scanned = collectMistakes(payload);
+      if (scanned.length) {
+        publishMistakes(scanned);
+        return;
+      }
       setBanner(
         e instanceof Error ? e.message : null,
-        "Could not save your application — please try again",
+        e instanceof Error
+          ? `Save failed — THIS IS WRONG\nDetails: ${e.message}`
+          : "Save failed — THIS IS WRONG\nDetails: unknown error",
       );
     } finally {
       setSubmitting(false);
@@ -302,6 +423,7 @@ export function StudentForm({
     ).fieldErrors;
     if (!fieldErrors) return;
     const values = getValues();
+    const mistakes: FieldMistake[] = [];
     for (const [field, msgs] of Object.entries(fieldErrors)) {
       if (!msgs?.length) continue;
       const message = formatFieldMistake(
@@ -309,56 +431,42 @@ export function StudentForm({
         values[field as keyof StudentFormInput],
         msgs[0],
       );
-      setFieldError(field as FieldPath<StudentFormInput>, {
-        type: "server",
+      mistakes.push({
+        field,
         message,
+        focusId: field === "birth_date" ? "birth-date-day" : field,
       });
     }
-    const first = Object.keys(fieldErrors)[0];
-    if (first) scrollToField(first);
+    if (mistakes.length) publishMistakes(mistakes);
   }
 
   function onInvalid(errs: FieldErrors<StudentFormInput>) {
-    const values = getValues();
-    const blocks: string[] = [];
-    for (const field of Object.keys(errs) as (keyof StudentFormInput)[]) {
-      const err = errs[field];
-      if (!err || typeof err !== "object" || !("message" in err)) continue;
-      if (!err.message) continue;
-      let actual: unknown = values[field];
-      if (field === "birth_date") {
-        actual = birthIsoFromSelects() || actual || "(nothing selected)";
-      }
-      const block = formatFieldMistake(String(field), actual, String(err.message));
-      blocks.push(block);
-      setFieldError(field as FieldPath<StudentFormInput>, {
-        type: "manual",
-        message: block,
-      });
-    }
-    if (blocks.length === 0) {
-      if (!birthY || !birthM || !birthD) {
-        blocks.push(
-          formatFieldMistake(
-            "birth_date",
-            [birthD || "?", birthM || "?", birthY || "?"].join("/"),
-          ),
-        );
-      }
-    }
-    setError(
-      blocks.length
-        ? blocks.join("\n\n")
-        : "Please fix the highlighted fields — each one shows what you entered vs what is expected.",
-    );
-    if (errs.birth_date || !birthY || !birthM || !birthD) {
-      document
-        .getElementById("birth-date-year")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const fromSchema = collectMistakes();
+    if (fromSchema.length) {
+      publishMistakes(fromSchema);
       return;
     }
-    const first = Object.keys(errs)[0];
-    if (first) scrollToField(first);
+    // Fallback from RHF errs only
+    const values = getValues();
+    const mistakes: FieldMistake[] = [];
+    for (const field of Object.keys(errs) as (keyof StudentFormInput)[]) {
+      const err = errs[field];
+      if (!err || typeof err !== "object" || !("message" in err) || !err.message) {
+        continue;
+      }
+      let actual: unknown = values[field];
+      if (field === "birth_date") {
+        actual =
+          birthIsoFromSelects() ||
+          `day=${birthD || "?"} month=${birthM || "?"} year=${birthY || "?"}`;
+      }
+      mistakes.push({
+        field: String(field),
+        message: formatFieldMistake(String(field), actual, String(err.message)),
+        focusId: field === "birth_date" ? "birth-date-day" : String(field),
+      });
+    }
+    if (mistakes.length) publishMistakes(mistakes);
   }
 
   function scrollToField(field: string) {
@@ -434,19 +542,10 @@ export function StudentForm({
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          const iso = syncBirthDate();
-          if (!iso) {
-            setFieldError("birth_date", {
-              type: "manual",
-              message: "Pick day, month and year",
-            });
-            setBanner(
-              "Please fix:\nBirth date: pick day, month and year",
-              "Please fix birth date",
-            );
-            document
-              .getElementById("birth-date-year")
-              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          syncBirthDate();
+          const mistakes = collectMistakes();
+          if (mistakes.length) {
+            publishMistakes(mistakes);
             return;
           }
           void handleSubmit(onSubmit, onInvalid)(e);
@@ -640,12 +739,17 @@ export function StudentForm({
                   ? "ID front (upload to replace)"
                   : "ID front photo"
               }
+              error={frontError || undefined}
             >
               <input
+                id="id-front-input"
                 type="file"
                 accept="image/*"
                 className="input"
-                onChange={(e) => setFrontFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  setFrontFile(e.target.files?.[0] ?? null);
+                  setFrontError(null);
+                }}
               />
             </Field>
             {(documentType === "id_card" || student?.id_back_path) && (
@@ -655,12 +759,17 @@ export function StudentForm({
                     ? "ID back (upload to replace)"
                     : "ID back photo"
                 }
+                error={backError || undefined}
               >
                 <input
+                  id="id-back-input"
                   type="file"
                   accept="image/*"
                   className="input"
-                  onChange={(e) => setBackFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    setBackFile(e.target.files?.[0] ?? null);
+                    setBackError(null);
+                  }}
                 />
               </Field>
             )}
@@ -839,7 +948,7 @@ function Field({
       <div
         className={
           error
-            ? "[&_input]:border-red-500 [&_select]:border-red-500 [&_input]:ring-1 [&_input]:ring-red-400 [&_select]:ring-1 [&_select]:ring-red-400"
+            ? "rounded-xl ring-2 ring-red-500 [&_input]:border-red-500 [&_select]:border-red-500"
             : undefined
         }
       >

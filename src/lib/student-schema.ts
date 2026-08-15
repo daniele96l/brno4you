@@ -59,6 +59,8 @@ export const STUDENT_FIELD_LABELS: Record<string, string> = {
   document_number: "Document number",
   document_country: "Issuing country",
   document_type: "Document type",
+  id_front: "ID front photo",
+  id_back: "ID back photo",
 };
 
 /** What a correct value should look like — one field at a time. */
@@ -74,6 +76,8 @@ export const STUDENT_FIELD_EXPECTED: Record<string, string> = {
   document_number: "the document number from your ID/passport",
   document_country: "the country that issued the document",
   document_type: "either “ID card” or “Passport”",
+  id_front: "a clear photo/image of the FRONT of your ID or passport",
+  id_back: "a clear photo/image of the BACK of your ID card",
 };
 
 function displayValue(value: unknown): string {
