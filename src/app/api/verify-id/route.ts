@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
 import { getStudent, saveStudent } from "@/lib/students";
 import { readUpload } from "@/lib/storage";
-import { compareStudentToExtracted, extractIdData } from "@/lib/verify-id";
+import {
+  compareStudentToExtracted,
+  extractIdData,
+  isIdVerificationMatched,
+} from "@/lib/verify-id";
 import { ensureStudentDocuments } from "@/lib/documents/ensure";
 
 export const runtime = "nodejs";
@@ -69,22 +73,43 @@ export async function POST(req: Request) {
 
     const extracted = await extractIdData(front, back);
     const mismatches = compareStudentToExtracted(student, extracted);
+    const matched = isIdVerificationMatched(student, extracted, mismatches);
+
+    // Low confidence / too few agreements with no field diffs → hard fail (not matched).
+    if (!matched && mismatches.length === 0) {
+      student.id_extracted = extracted;
+      student.id_mismatches = [];
+      student.id_verification_status = "failed";
+      student.id_verified_at = new Date().toISOString();
+      student.updated_at = student.id_verified_at;
+      await saveStudent(student);
+      return NextResponse.json(
+        {
+          error:
+            "Could not read the ID clearly enough to verify. Please upload a clearer photo of the document.",
+          status: "failed",
+          mismatches: [],
+          extracted,
+          skipped: false,
+        },
+        { status: 422 },
+      );
+    }
 
     student.id_extracted = extracted;
     student.id_mismatches = mismatches;
-    student.id_verification_status =
-      mismatches.length === 0 ? "matched" : "pending";
+    student.id_verification_status = matched ? "matched" : "pending";
     student.id_verified_at = new Date().toISOString();
     student.updated_at = student.id_verified_at;
     await saveStudent(student);
 
-    if (mismatches.length === 0) {
+    if (matched) {
       await ensureDocsSafe(studentId);
     }
 
     const refreshed = await getStudent(studentId);
     return NextResponse.json({
-      status: mismatches.length === 0 ? "matched" : "mismatch",
+      status: matched ? "matched" : "mismatch",
       mismatches,
       extracted,
       skipped: false,

@@ -3,6 +3,12 @@ import sharp from "sharp";
 import type { ExtractedIdData, FieldMismatch, Student } from "./types";
 import { valuesMatch } from "./normalize";
 
+/** Minimum OCR fields that must be present and agree before status is matched. */
+export const MIN_ID_FIELD_AGREEMENTS = 3;
+
+/** Below this, extraction is too unreliable to accept as matched. */
+export const MIN_ID_OCR_CONFIDENCE = 0.5;
+
 async function downscale(buf: Buffer): Promise<Buffer> {
   return sharp(buf)
     .rotate()
@@ -13,6 +19,10 @@ async function downscale(buf: Buffer): Promise<Buffer> {
 
 function toDataUrl(buf: Buffer) {
   return `data:image/jpeg;base64,${buf.toString("base64")}`;
+}
+
+function usable(value: string | null | undefined): boolean {
+  return Boolean(value && String(value).trim());
 }
 
 export async function extractIdData(
@@ -29,7 +39,7 @@ export async function extractIdData(
   const images: OpenAI.Chat.ChatCompletionContentPart[] = [
     {
       type: "text",
-      text: `Extract identity document fields as JSON only. Keys: first_name, second_name, surname, second_surname, birth_date (YYYY-MM-DD), nationality, document_country, document_number, document_type (id_card|passport), confidence (0-1). Use null for missing fields. Do not invent values.`,
+      text: `Extract identity document fields as JSON only. Keys: first_name, second_name, surname, second_surname, birth_date (YYYY-MM-DD), nationality, document_country, document_number, document_type (id_card|passport), confidence (0-1). Use null for missing fields. Do not invent values. If the image is not a readable ID/passport, set confidence low and leave fields null.`,
     },
     { type: "image_url", image_url: { url: toDataUrl(frontSmall), detail: "low" } },
   ];
@@ -60,17 +70,19 @@ export async function extractIdData(
   return JSON.parse(raw) as ExtractedIdData;
 }
 
-export function compareStudentToExtracted(
+type FieldCheck = {
+  field: string;
+  formValue: string;
+  idValue: string | null | undefined;
+  kind?: "text" | "date" | "country";
+  skip?: boolean;
+};
+
+function buildChecks(
   student: Student,
   extracted: ExtractedIdData,
-): FieldMismatch[] {
-  const checks: {
-    field: string;
-    formValue: string;
-    idValue: string | null | undefined;
-    kind?: "text" | "date" | "country";
-    skip?: boolean;
-  }[] = [
+): FieldCheck[] {
+  return [
     { field: "first_name", formValue: student.first_name, idValue: extracted.first_name },
     {
       field: "second_name",
@@ -110,11 +122,26 @@ export function compareStudentToExtracted(
       skip: !student.document_country?.trim(),
     },
   ];
+}
 
+export function compareStudentToExtracted(
+  student: Student,
+  extracted: ExtractedIdData,
+): FieldMismatch[] {
   const mismatches: FieldMismatch[] = [];
-  for (const c of checks) {
+  for (const c of buildChecks(student, extracted)) {
     if (c.skip) continue;
-    if (!c.idValue) continue;
+    // Missing OCR does not count as agreement — surface as mismatch when form has a value.
+    if (!usable(c.idValue)) {
+      if (usable(c.formValue)) {
+        mismatches.push({
+          field: c.field,
+          formValue: c.formValue,
+          idValue: "",
+        });
+      }
+      continue;
+    }
     if (!valuesMatch(c.formValue, c.idValue, c.kind || "text")) {
       mismatches.push({
         field: c.field,
@@ -124,4 +151,33 @@ export function compareStudentToExtracted(
     }
   }
   return mismatches;
+}
+
+/** How many fields have usable values on both sides and actually agree. */
+export function countAgreeingFields(
+  student: Student,
+  extracted: ExtractedIdData,
+): number {
+  let n = 0;
+  for (const c of buildChecks(student, extracted)) {
+    if (c.skip) continue;
+    if (!usable(c.formValue) || !usable(c.idValue)) continue;
+    if (valuesMatch(c.formValue, c.idValue, c.kind || "text")) n += 1;
+  }
+  return n;
+}
+
+/**
+ * True only when OCR is usable, confidence is acceptable, enough fields agree,
+ * and there are no field mismatches. Empty/failed OCR never matches.
+ */
+export function isIdVerificationMatched(
+  student: Student,
+  extracted: ExtractedIdData,
+  mismatches: FieldMismatch[],
+): boolean {
+  if (mismatches.length > 0) return false;
+  const conf = extracted.confidence;
+  if (typeof conf === "number" && conf < MIN_ID_OCR_CONFIDENCE) return false;
+  return countAgreeingFields(student, extracted) >= MIN_ID_FIELD_AGREEMENTS;
 }

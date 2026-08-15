@@ -88,10 +88,17 @@ export function valuesMatch(
   kind: "text" | "date" | "country" = "text",
 ) {
   if (kind === "date") {
-    return normalizeDate(formValue) === normalizeDate(idValue);
+    const a = normalizeDate(formValue);
+    const b = normalizeDate(idValue);
+    // Empty never counts as agreement (avoids vacuous true).
+    if (!a || !b) return false;
+    return a === b;
   }
   if (kind === "country") {
     return countriesMatch(formValue, idValue);
   }
-  return normalizeText(formValue) === normalizeText(idValue);
+  const a = normalizeText(formValue);
+  const b = normalizeText(idValue);
+  if (!a || !b) return false;
+  return a === b;
 }
