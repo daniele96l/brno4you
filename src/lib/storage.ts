@@ -6,7 +6,7 @@ export async function saveUpload(
   data: Buffer,
   contentType: string,
 ): Promise<string> {
-  await rpc("verno4u_put_file_b64", {
+  await rpc("brno4you_put_file_b64", {
     p_path: relativeKey,
     p_content_b64: data.toString("base64"),
     p_content_type: contentType,
@@ -19,7 +19,7 @@ export async function readUpload(storagePath: string): Promise<Buffer> {
     path: string;
     content_type: string;
     content_base64: string;
-  } | null>("verno4u_get_file", { p_path: storagePath });
+  } | null>("brno4you_get_file", { p_path: storagePath });
   if (!file?.content_base64) throw new Error("File not found");
   return Buffer.from(file.content_base64, "base64");
 }

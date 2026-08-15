@@ -35,18 +35,18 @@ function mapStudent(raw: Record<string, unknown> | null): Student | null {
 }
 
 export async function saveStudent(student: Student) {
-  await rpc("verno4u_upsert_student", { p_student: student });
+  await rpc("brno4you_upsert_student", { p_student: student });
 }
 
 export async function getStudent(id: string): Promise<Student | null> {
-  const data = await rpc<Record<string, unknown> | null>("verno4u_get_student", {
+  const data = await rpc<Record<string, unknown> | null>("brno4you_get_student", {
     p_id: id,
   });
   return mapStudent(data);
 }
 
 export async function listStudents(): Promise<Student[]> {
-  const data = await rpc<Record<string, unknown>[]>("verno4u_list_students", {});
+  const data = await rpc<Record<string, unknown>[]>("brno4you_list_students", {});
   return (data || []).map((r) => mapStudent(r)!).filter(Boolean);
 }
 
@@ -104,17 +104,17 @@ export function applyFormToStudent(
 }
 
 export async function saveDocument(doc: GeneratedDocument) {
-  await rpc("verno4u_save_document", { p_doc: doc });
+  await rpc("brno4you_save_document", { p_doc: doc });
 }
 
 export async function getDocument(
   id: string,
 ): Promise<GeneratedDocument | null> {
-  return rpc<GeneratedDocument | null>("verno4u_get_document", { p_id: id });
+  return rpc<GeneratedDocument | null>("brno4you_get_document", { p_id: id });
 }
 
 export async function listStudentDocuments(studentId: string) {
-  const docs = await rpc<GeneratedDocument[]>("verno4u_list_documents", {
+  const docs = await rpc<GeneratedDocument[]>("brno4you_list_documents", {
     p_student_id: studentId,
   });
   return docs || [];

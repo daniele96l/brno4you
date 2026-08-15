@@ -15,7 +15,7 @@ export default function HomePage() {
           Erasmus NGO portal
         </p>
         <h1 className="font-[family-name:var(--font-display)] text-4xl leading-tight text-[var(--ink)] sm:text-5xl">
-          Verno4U
+          Brno4You
         </h1>
         <p className="text-lg text-[var(--muted)]">
           Submit your student details and ID so we can prepare your Erasmus

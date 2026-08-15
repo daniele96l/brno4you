@@ -14,8 +14,8 @@ const sans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Verno4U — Erasmus student portal",
-  description: "Student registration and ID verification for Verno4U",
+  title: "Brno4You — Erasmus student portal",
+  description: "Student registration and ID verification for Brno4You",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
         <header className="border-b border-[var(--line)] bg-white/50 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
             <Link href="/" className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[var(--ink)]">
-              Verno4U
+              Brno4You
             </Link>
             <nav className="flex gap-4 text-sm text-[var(--muted)]">
               <Link href="/apply" className="hover:text-[var(--ink)]">

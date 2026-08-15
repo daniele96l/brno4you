@@ -5,7 +5,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
-    const token = req.cookies.get("verno_admin")?.value;
+    const token = req.cookies.get("brno4you_admin")?.value;
     if (!token) {
       const url = req.nextUrl.clone();
       url.pathname = "/admin/login";

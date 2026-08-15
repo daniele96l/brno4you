@@ -20,7 +20,7 @@ function buildPdf(student: Student, generatedAt: string): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.fontSize(18).text("Verno4U — Student summary", { underline: true });
+    doc.fontSize(18).text("Brno4You — Student summary", { underline: true });
     doc.moveDown();
     doc.fontSize(11).fillColor("#444").text(`Generated: ${generatedAt}`);
     doc.moveDown();
@@ -57,7 +57,7 @@ export const studentSummaryTemplate: DocumentTemplate = {
     const buffer = await buildPdf(student, ctx.generatedAt);
     return {
       buffer,
-      filename: `verno4u-${student.id}-summary.pdf`,
+      filename: `brno4you-${student.id}-summary.pdf`,
       mime: "application/pdf",
     };
   },
