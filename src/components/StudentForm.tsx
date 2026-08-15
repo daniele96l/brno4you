@@ -40,7 +40,9 @@ function showFormError(raw: unknown, fallback: string): string {
     return formatStudentValidationError(raw) || fallback;
   }
   const text = raw instanceof Error ? raw.message : String(raw);
-  if (/THIS IS WRONG/i.test(text) || text.includes("You entered:")) return text;
+  if (text.includes("You entered:") || text.includes("Expected instead:")) {
+    return text;
+  }
   return explainApiError(text, fallback);
 }
 
@@ -454,7 +456,7 @@ export function StudentForm({
       }
       if (!student && !projectId) {
         setError(
-          "Invite link — THIS IS WRONG\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
+          "Invite link\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
         );
         return;
       }
@@ -527,7 +529,10 @@ export function StudentForm({
           return;
         }
         setError(
-          showFormError(json.error, `Save failed — THIS IS WRONG\nServer said: ${serverMsg || "(no details)"}`),
+          showFormError(
+            json.error,
+            `Save failed\nServer said: ${serverMsg || "(no details)"}`,
+          ),
         );
         return;
       }
@@ -546,8 +551,8 @@ export function StudentForm({
       setBanner(
         e instanceof Error ? e.message : null,
         e instanceof Error
-          ? `Save failed — THIS IS WRONG\nDetails: ${e.message}`
-          : "Save failed — THIS IS WRONG\nDetails: unknown error",
+          ? `Save failed\nDetails: ${e.message}`
+          : "Save failed\nDetails: unknown error",
       );
     } finally {
       setSubmitting(false);
@@ -1011,7 +1016,7 @@ export function StudentForm({
                   className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3"
                 >
                   <p className="font-semibold text-[var(--navy)]">
-                    {label} — THIS IS WRONG
+                    {label}
                   </p>
                   <div className="mt-2 space-y-1 text-sm">
                     <p>

@@ -128,8 +128,8 @@ export function explainApiError(
     const fromZodJson = formatStudentValidationError(error);
     if (
       fromZodJson &&
-      (fromZodJson.includes("THIS IS WRONG") ||
-        fromZodJson.includes("You entered:"))
+      (fromZodJson.includes("You entered:") ||
+        fromZodJson.includes("Expected instead:"))
     ) {
       return fromZodJson;
     }

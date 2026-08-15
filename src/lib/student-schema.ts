@@ -87,7 +87,7 @@ function displayValue(value: unknown): string {
 }
 
 /**
- * One field, one warning — always: THIS IS WRONG / you entered Y / expected X.
+ * One field, one warning — always: you entered Y / expected X.
  */
 export function formatFieldMistake(
   field: string,
@@ -99,7 +99,7 @@ export function formatFieldMistake(
     STUDENT_FIELD_EXPECTED[field] || "a valid value for this field";
   const got = displayValue(actual);
   return (
-    `${label} — THIS IS WRONG\n` +
+    `${label}\n` +
     `You entered: ${got}\n` +
     `Expected instead: ${expected}`
   );
