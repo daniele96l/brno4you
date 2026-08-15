@@ -119,3 +119,8 @@ export async function listStudentDocuments(studentId: string) {
   });
   return docs || [];
 }
+
+export async function listAllDocuments() {
+  const docs = await rpc<GeneratedDocument[]>("brno4you_list_all_documents", {});
+  return docs || [];
+}

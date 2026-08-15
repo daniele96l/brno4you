@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { GeneratedDocument } from "@/lib/types";
 
 type TemplateItem = {
@@ -13,29 +13,42 @@ type Props = {
   studentId: string;
   templates: TemplateItem[];
   initialDocuments: GeneratedDocument[];
+  preselectedId?: string;
 };
 
 export function GenerateDocumentForm({
   studentId,
   templates,
   initialDocuments,
+  preselectedId,
 }: Props) {
+  const studentTemplates = useMemo(
+    () => templates.filter((t) => t.scope === "student"),
+    [templates],
+  );
+  const [selectedId, setSelectedId] = useState(
+    preselectedId && studentTemplates.some((t) => t.id === preselectedId)
+      ? preselectedId
+      : studentTemplates[0]?.id || "",
+  );
   const [documents, setDocuments] = useState(initialDocuments);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const studentTemplates = templates.filter((t) => t.scope === "student");
+  const selected = studentTemplates.find((t) => t.id === selectedId);
+  const existing = documents.find((d) => d.template_id === selectedId);
 
-  async function generate(templateId: string) {
-    setLoadingId(templateId);
+  async function generate() {
+    if (!selectedId) return;
+    setLoading(true);
     setError(null);
     const res = await fetch("/api/documents/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, templateId }),
+      body: JSON.stringify({ studentId, templateId: selectedId }),
     });
     const json = await res.json();
-    setLoadingId(null);
+    setLoading(false);
     if (!res.ok) {
       setError(json.error || "Generation failed");
       return;
@@ -45,28 +58,76 @@ export function GenerateDocumentForm({
 
   return (
     <div className="space-y-5 text-sm">
-      <ul className="space-y-2">
-        {studentTemplates.map((t) => (
-          <li
-            key={t.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] px-3 py-2"
-          >
-            <span className="font-medium text-[var(--navy)]">{t.label}</span>
+      <div>
+        <p className="mb-2 font-semibold text-[var(--navy)]">
+          Select one document
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {studentTemplates.map((t) => {
+            const done = documents.some((d) => d.template_id === t.id);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSelectedId(t.id)}
+                className={`rounded-2xl border px-3 py-3 text-left transition ${
+                  selectedId === t.id
+                    ? "border-[var(--navy)] bg-[var(--navy)] text-white"
+                    : "border-[var(--line)] hover:border-[var(--navy)]"
+                }`}
+              >
+                <div className="font-semibold">{t.label}</div>
+                <div
+                  className={`mt-1 text-xs ${selectedId === t.id ? "text-white/80" : "text-[var(--mint-text)]"}`}
+                >
+                  {done ? "Generated" : "Not generated yet"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selected && (
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4">
+          <h3 className="font-bold text-[var(--navy)]">{selected.label}</h3>
+          <p className="mt-1 text-[var(--mint-text)]">
+            {existing
+              ? `Last generated ${new Date(existing.created_at).toLocaleString()}`
+              : "Ready to generate for this student."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              className="btn-secondary"
-              disabled={loadingId === t.id}
-              onClick={() => generate(t.id)}
+              className="btn-primary"
+              disabled={loading}
+              onClick={generate}
             >
-              {loadingId === t.id ? "Generating…" : "Generate PDF"}
+              {loading
+                ? "Generating…"
+                : existing
+                  ? "Regenerate PDF"
+                  : "Generate PDF"}
             </button>
-          </li>
-        ))}
-      </ul>
+            {existing && (
+              <a
+                className="btn-secondary"
+                href={`/api/documents/${existing.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Review PDF
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {error && <p className="text-red-600">{error}</p>}
+
       <div>
         <h3 className="mb-2 font-semibold text-[var(--navy)]">
-          Generated for this student
+          All files for this student
         </h3>
         <ul className="space-y-2">
           {documents.length === 0 && (

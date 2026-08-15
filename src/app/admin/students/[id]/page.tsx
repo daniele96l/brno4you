@@ -6,13 +6,17 @@ import { GenerateDocumentForm } from "@/components/GenerateDocumentForm";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ doc?: string }>;
+};
 
-export default async function AdminStudentPage({ params }: Props) {
+export default async function AdminStudentPage({ params, searchParams }: Props) {
   if (!(await isAdminAuthenticated())) {
     redirect("/admin/login");
   }
   const { id } = await params;
+  const { doc } = await searchParams;
   const student = await getStudent(id);
   if (!student) notFound();
 
@@ -105,6 +109,7 @@ export default async function AdminStudentPage({ params }: Props) {
           studentId={student.id}
           templates={templates}
           initialDocuments={documents}
+          preselectedId={doc}
         />
       </div>
     </div>
