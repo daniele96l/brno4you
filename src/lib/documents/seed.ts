@@ -16,29 +16,49 @@ type SeedEntry = {
 /** Upsert bundled templates when the DB has none (or force=true). */
 export async function ensureTemplatesSeeded(force = false) {
   const existing = await listDocTemplates();
-  if (existing.length > 0 && !force) return existing;
-
   const indexPath = path.join(
     process.cwd(),
     "content/doc-templates/index.json",
   );
   const index = JSON.parse(await readFile(indexPath, "utf8")) as SeedEntry[];
 
-  const seeded: DocTemplate[] = [];
-  for (let i = 0; i < index.length; i++) {
-    const entry = index[i];
-    const body = await readFile(
-      path.join(process.cwd(), "content/doc-templates", entry.file),
-      "utf8",
-    );
-    const saved = await saveDocTemplate({
-      id: entry.id,
-      label: entry.label,
-      scope: entry.scope,
-      body,
-      sort_order: i + 1,
-    });
-    seeded.push(saved);
+  if (existing.length === 0 || force) {
+    const seeded: DocTemplate[] = [];
+    for (let i = 0; i < index.length; i++) {
+      const entry = index[i];
+      const body = await readFile(
+        path.join(process.cwd(), "content/doc-templates", entry.file),
+        "utf8",
+      );
+      const saved = await saveDocTemplate({
+        id: entry.id,
+        label: entry.label,
+        scope: entry.scope,
+        body,
+        sort_order: i + 1,
+      });
+      seeded.push(saved);
+    }
+    return seeded;
   }
-  return seeded;
+
+  // Refresh partnership bodies that still lack partner_* placeholders
+  for (const entry of index.filter((e) => e.id.startsWith("partnership_"))) {
+    const current = existing.find((t) => t.id === entry.id);
+    if (current && !current.body.includes("{{partner_name}}")) {
+      const body = await readFile(
+        path.join(process.cwd(), "content/doc-templates", entry.file),
+        "utf8",
+      );
+      await saveDocTemplate({
+        id: entry.id,
+        label: entry.label,
+        scope: entry.scope,
+        body,
+        sort_order: current.sort_order,
+      });
+    }
+  }
+
+  return listDocTemplates();
 }

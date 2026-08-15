@@ -5,16 +5,21 @@ import { listAllDocuments, listStudents } from "@/lib/students";
 import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
+import { ensureSampleDataSeeded, listPartners } from "@/lib/partners";
 
 export default async function AdminPage() {
   if (!(await isAdminAuthenticated())) {
     redirect("/admin/login");
   }
 
-  const students = await listStudents();
   await ensureTemplatesSeeded();
-  const templates = await listDocTemplates();
-  const documents = await listAllDocuments();
+  await ensureSampleDataSeeded();
+  const [students, templates, documents, partners] = await Promise.all([
+    listStudents(),
+    listDocTemplates(),
+    listAllDocuments(),
+    listPartners(),
+  ]);
   const studentTemplates = templates.filter((t) => t.scope === "student");
 
   const coverage = students.map((s) => {
@@ -135,6 +140,54 @@ export default async function AdminPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-2xl font-extrabold text-[var(--navy)]">
+            Partners
+          </h2>
+          <p className="text-sm text-[var(--mint-text)]">
+            {partners.length} partner organisation
+            {partners.length === 1 ? "" : "s"} for partnership agreements
+          </p>
+        </div>
+        <div className="panel overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-[var(--line)] text-[var(--muted)]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Organisation</th>
+                <th className="px-4 py-3 font-medium">Country</th>
+                <th className="px-4 py-3 font-medium">OID</th>
+                <th className="px-4 py-3 font-medium">Coordinator</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partners.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-[var(--muted)]">
+                    No partners yet.
+                  </td>
+                </tr>
+              )}
+              {partners.map((p) => (
+                <tr
+                  key={p.id}
+                  className="border-b border-[var(--line)] last:border-0"
+                >
+                  <td className="px-4 py-3 font-medium text-[var(--navy)]">
+                    {p.name}
+                  </td>
+                  <td className="px-4 py-3">{p.country}</td>
+                  <td className="px-4 py-3">{p.oid}</td>
+                  <td className="px-4 py-3">{p.coordinator_name}</td>
+                  <td className="px-4 py-3">{p.email}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import {
 import { generateFromDbTemplate } from "@/lib/documents/registry";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
+import { listPartners } from "@/lib/partners";
 import { saveUpload } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     studentId?: string | null;
     templateId?: string;
+    partnerId?: string | null;
   };
   if (!body.templateId) {
     return NextResponse.json({ error: "templateId required" }, { status: 400 });
@@ -42,8 +44,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
+    const partners = await listPartners();
+    const partner = body.partnerId
+      ? partners.find((p) => p.id === body.partnerId) || null
+      : partners[0] || null;
+
     const generatedAt = new Date().toISOString();
-    const result = await generateFromDbTemplate(body.templateId, student);
+    const result = await generateFromDbTemplate(
+      body.templateId,
+      student,
+      partner,
+    );
     const docId = randomId();
     const storage_path = await saveUpload(
       `docs/${docId}.pdf`,

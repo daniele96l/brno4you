@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { GeneratedDocument, Student } from "@/lib/types";
+import type { Partner } from "@/lib/partners";
 
 type TemplateItem = {
   id: string;
@@ -13,6 +14,7 @@ type TemplateItem = {
 
 type Props = {
   students: Student[];
+  partners: Partner[];
   templates: TemplateItem[];
   documents: GeneratedDocument[];
   initialTemplateId?: string;
@@ -32,8 +34,13 @@ function latestDoc(
   );
 }
 
+function isPartnershipTemplate(id: string) {
+  return id.startsWith("partnership_");
+}
+
 export function ReportsDashboard({
   students,
+  partners,
   templates,
   documents: initialDocs,
   initialTemplateId,
@@ -52,6 +59,7 @@ export function ReportsDashboard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState(partners[0]?.id || "");
 
   const selected = templates.find((t) => t.id === selectedId) || null;
 
@@ -99,12 +107,20 @@ export function ReportsDashboard({
 
   async function generate(studentId: string | null) {
     if (!selected) return;
+    if (isPartnershipTemplate(selected.id) && !partnerId) {
+      setError("Select a partner organisation first");
+      return;
+    }
     setLoading(true);
     setError(null);
     const res = await fetch("/api/documents/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId: selected.id, studentId }),
+      body: JSON.stringify({
+        templateId: selected.id,
+        studentId,
+        partnerId: isPartnershipTemplate(selected.id) ? partnerId : null,
+      }),
     });
     const json = await res.json();
     setLoading(false);
@@ -146,7 +162,6 @@ export function ReportsDashboard({
 
   return (
     <div className="space-y-6">
-      {/* Overall visualization */}
       <div className="panel space-y-4 p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -197,7 +212,6 @@ export function ReportsDashboard({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        {/* Pre-select one report */}
         <aside className="panel space-y-2 p-3">
           <p className="px-2 pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
             Choose report
@@ -249,14 +263,13 @@ export function ReportsDashboard({
                   <p className="text-sm text-[var(--mint-text)]">
                     {selected.scope === "student"
                       ? "Per-student report — review who still needs it, then generate."
-                      : "Project-level report — filled from project settings."}
+                      : isPartnershipTemplate(selected.id)
+                        ? "Partnership agreement — choose a partner, then generate."
+                        : "Project-level report — filled from project settings."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/admin/templates`}
-                    className="btn-secondary"
-                  >
+                  <Link href={`/admin/templates`} className="btn-secondary">
                     Edit text
                   </Link>
                   {selected.scope === "student" && (
@@ -281,6 +294,29 @@ export function ReportsDashboard({
                   )}
                 </div>
               </div>
+
+              {selected.scope === "general" &&
+                isPartnershipTemplate(selected.id) && (
+                  <label className="block space-y-1 text-sm">
+                    <span className="font-medium text-[var(--navy)]">
+                      Partner organisation
+                    </span>
+                    <select
+                      className="w-full max-w-md rounded-xl border border-[var(--line)] bg-white px-3 py-2"
+                      value={partnerId}
+                      onChange={(e) => setPartnerId(e.target.value)}
+                    >
+                      {partners.length === 0 && (
+                        <option value="">No partners seeded</option>
+                      )}
+                      {partners.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.country})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
               {selected.scope === "general" && (
                 <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-3 text-sm">

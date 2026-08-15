@@ -1,5 +1,6 @@
 import type { DocumentTemplate } from "./types";
 import type { Student } from "../types";
+import type { Partner } from "../partners";
 import { textToPdf } from "./pdf";
 import {
   buildPlaceholderMap,
@@ -26,6 +27,7 @@ export function listTemplates() {
 export async function generateFromDbTemplate(
   templateId: string,
   student: Student | null,
+  partner: Partner | null = null,
 ) {
   const template = await getDocTemplate(templateId);
   if (!template) throw new Error("Unknown template");
@@ -37,13 +39,15 @@ export async function generateFromDbTemplate(
   const settings = await getProjectSettings();
   const filled = fillTemplate(
     template.body,
-    buildPlaceholderMap(settings, student),
+    buildPlaceholderMap(settings, student, partner),
   );
   const buffer = await textToPdf(template.label, filled);
 
   const slug = student
     ? studentFullName(student).replace(/\s+/g, "-").toLowerCase() || student.id
-    : "general";
+    : partner
+      ? partner.name.replace(/\s+/g, "-").toLowerCase()
+      : "general";
 
   return {
     buffer,

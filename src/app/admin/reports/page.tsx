@@ -4,6 +4,7 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { listAllDocuments, listStudents } from "@/lib/students";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
+import { ensureSampleDataSeeded, listPartners } from "@/lib/partners";
 import { ReportsDashboard } from "./ReportsDashboard";
 
 type Props = { searchParams: Promise<{ doc?: string }> };
@@ -15,10 +16,12 @@ export default async function AdminReportsPage({ searchParams }: Props) {
 
   const { doc } = await searchParams;
   await ensureTemplatesSeeded();
-  const [students, templates, documents] = await Promise.all([
+  await ensureSampleDataSeeded();
+  const [students, templates, documents, partners] = await Promise.all([
     listStudents(),
     listDocTemplates(),
     listAllDocuments(),
+    listPartners(),
   ]);
 
   return (
@@ -51,6 +54,7 @@ export default async function AdminReportsPage({ searchParams }: Props) {
 
       <ReportsDashboard
         students={students}
+        partners={partners}
         templates={templates}
         documents={documents}
         initialTemplateId={doc}

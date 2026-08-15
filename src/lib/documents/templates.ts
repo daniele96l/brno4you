@@ -1,5 +1,6 @@
 import { rpc } from "../supabase";
 import type { Student } from "../types";
+import type { Partner } from "../partners";
 
 export type ProjectSettings = {
   id: string;
@@ -65,6 +66,7 @@ export function studentFullName(s: Student) {
 export function buildPlaceholderMap(
   settings: ProjectSettings,
   student?: Student | null,
+  partner?: Partner | null,
 ): Record<string, string> {
   const map: Record<string, string> = {
     project_name: settings.project_name || "",
@@ -85,6 +87,15 @@ export function buildPlaceholderMap(
     nationality: "",
     document_number: "",
     document_country: "",
+    partner_name: "",
+    partner_oid: "",
+    partner_national_id: "",
+    partner_address: "",
+    partner_legal_representative: "",
+    partner_coordinator_name: "",
+    partner_email: "",
+    partner_phone: "",
+    partner_country: "",
   };
   if (student) {
     map.full_name = studentFullName(student);
@@ -96,6 +107,17 @@ export function buildPlaceholderMap(
     map.nationality = student.nationality;
     map.document_number = student.document_number;
     map.document_country = student.document_country;
+  }
+  if (partner) {
+    map.partner_name = partner.name;
+    map.partner_oid = partner.oid;
+    map.partner_national_id = partner.national_id;
+    map.partner_address = partner.address;
+    map.partner_legal_representative = partner.legal_representative;
+    map.partner_coordinator_name = partner.coordinator_name;
+    map.partner_email = partner.email;
+    map.partner_phone = partner.phone;
+    map.partner_country = partner.country;
   }
   return map;
 }

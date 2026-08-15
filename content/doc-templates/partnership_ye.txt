@@ -38,20 +38,21 @@ Phone
 
 The Partner Organization
 Name
-
+{{partner_name}}
 OID
-
+{{partner_oid}}
 National ID, if applicable
-
+{{partner_national_id}}
 Address
-
+{{partner_address}}
 Legal representative
-
+{{partner_legal_representative}}
 Project coordinator / contact person
-
+{{partner_coordinator_name}}
 Email
-
+{{partner_email}}
 Phone
+{{partner_phone}}
 
 III. Duration and validity
 This Agreement shall enter into force on the date of signature by both parties, unless a different date is required by the Grant Agreement or agreed in writing by the parties.
