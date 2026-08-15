@@ -12,9 +12,11 @@ import type { FieldMismatch, Student } from "@/lib/types";
 
 type Props = {
   initial?: Student | null;
+  projectId?: string;
+  projectTitle?: string;
 };
 
-export function StudentForm({ initial }: Props) {
+export function StudentForm({ initial, projectId, projectTitle }: Props) {
   const router = useRouter();
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
@@ -98,6 +100,9 @@ export function StudentForm({ initial }: Props) {
     setError(null);
     setMatchOk(false);
     try {
+      if (!student && !projectId) {
+        throw new Error("Missing project — use your invite link");
+      }
       if (!student && !frontFile) {
         throw new Error("Please upload the front of your ID");
       }
@@ -106,7 +111,10 @@ export function StudentForm({ initial }: Props) {
       }
 
       const form = new FormData();
-      form.set("data", JSON.stringify(data));
+      form.set(
+        "data",
+        JSON.stringify(student ? data : { ...data, project_id: projectId }),
+      );
       if (frontFile) form.set("id_front", frontFile);
       if (backFile) form.set("id_back", backFile);
 
@@ -124,7 +132,7 @@ export function StudentForm({ initial }: Props) {
 
       setStudent(json.student);
       if (!student) {
-        router.replace(`/apply/${json.student.id}`);
+        router.replace(`/apply/student/${json.student.id}`);
       }
       await verify(json.student.id, true);
     } catch (e) {
@@ -150,6 +158,11 @@ export function StudentForm({ initial }: Props) {
 
   return (
     <div className="space-y-8">
+      {projectTitle && (
+        <p className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-3 text-sm text-[var(--navy)]">
+          Applying for <strong>{projectTitle}</strong>
+        </p>
+      )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">Personal details</h2>

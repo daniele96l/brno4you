@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { studentFormSchema } from "@/lib/student-schema";
 import { applyFormToStudent, getStudent, saveStudent } from "@/lib/students";
-import { canAccessStudent } from "@/lib/auth";
+import { canAccessStudent, isAdminAuthenticated } from "@/lib/auth";
 import { extensionForMime, fileHash, saveUpload } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -17,6 +17,30 @@ export async function GET(_req: Request, ctx: Ctx) {
   if (!student) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  return NextResponse.json({ student });
+}
+
+export async function PATCH(req: Request, ctx: Ctx) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id } = await ctx.params;
+  const existing = await getStudent(id);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const body = (await req.json()) as {
+    needs_travel_declaration?: boolean;
+    project_id?: string;
+  };
+  const student = {
+    ...existing,
+    needs_travel_declaration:
+      body.needs_travel_declaration ?? existing.needs_travel_declaration,
+    project_id: body.project_id ?? existing.project_id,
+    updated_at: new Date().toISOString(),
+  };
+  await saveStudent(student);
   return NextResponse.json({ student });
 }
 
@@ -39,7 +63,10 @@ export async function PUT(req: Request, ctx: Ctx) {
     }
     const parsed = studentFormSchema.safeParse(JSON.parse(jsonRaw));
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.flatten() },
+        { status: 400 },
+      );
     }
 
     let student = applyFormToStudent(existing, parsed.data);

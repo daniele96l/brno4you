@@ -10,6 +10,7 @@ import { generateFromDbTemplate } from "@/lib/documents/registry";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
 import { listPartners } from "@/lib/partners";
+import { getProject } from "@/lib/projects";
 import { saveUpload } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
     studentId?: string | null;
     templateId?: string;
     partnerId?: string | null;
+    projectId?: string | null;
   };
   if (!body.templateId) {
     return NextResponse.json({ error: "templateId required" }, { status: 400 });
@@ -44,7 +46,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    const partners = await listPartners();
+    const projectId =
+      body.projectId || student?.project_id || null;
+    const project = projectId ? await getProject(projectId) : null;
+
+    const partners = await listPartners(projectId);
     const partner = body.partnerId
       ? partners.find((p) => p.id === body.partnerId) || null
       : partners[0] || null;
@@ -54,6 +60,7 @@ export async function POST(req: Request) {
       body.templateId,
       student,
       partner,
+      project,
     );
     const docId = randomId();
     const storage_path = await saveUpload(

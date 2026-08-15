@@ -27,6 +27,8 @@ export type ExtractedIdData = {
 
 export type Student = {
   id: string;
+  project_id: string;
+  needs_travel_declaration: boolean;
   first_name: string;
   has_second_name: boolean;
   second_name: string | null;

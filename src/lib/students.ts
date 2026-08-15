@@ -7,6 +7,8 @@ function mapStudent(raw: Record<string, unknown> | null): Student | null {
   if (!raw) return null;
   return {
     id: String(raw.id),
+    project_id: String(raw.project_id || ""),
+    needs_travel_declaration: Boolean(raw.needs_travel_declaration),
     first_name: String(raw.first_name),
     has_second_name: Boolean(raw.has_second_name),
     second_name: (raw.second_name as string) ?? null,
@@ -45,15 +47,22 @@ export async function getStudent(id: string): Promise<Student | null> {
   return mapStudent(data);
 }
 
-export async function listStudents(): Promise<Student[]> {
-  const data = await rpc<Record<string, unknown>[]>("brno4you_list_students", {});
+export async function listStudents(projectId?: string | null): Promise<Student[]> {
+  const data = await rpc<Record<string, unknown>[]>("brno4you_list_students", {
+    p_project_id: projectId ?? null,
+  });
   return (data || []).map((r) => mapStudent(r)!).filter(Boolean);
 }
 
-export function createStudentFromForm(data: StudentFormInput): Student {
+export function createStudentFromForm(
+  data: StudentFormInput,
+  projectId: string,
+): Student {
   const now = new Date().toISOString();
   return {
     id: randomId(),
+    project_id: projectId,
+    needs_travel_declaration: false,
     first_name: data.first_name,
     has_second_name: data.has_second_name,
     second_name: data.has_second_name ? data.second_name || null : null,

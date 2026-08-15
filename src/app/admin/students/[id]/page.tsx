@@ -5,6 +5,11 @@ import { getStudent, listStudentDocuments } from "@/lib/students";
 import { GenerateDocumentForm } from "@/components/GenerateDocumentForm";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
+import {
+  availableStudentTemplateIds,
+  getProject,
+  projectTypeLabel,
+} from "@/lib/projects";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -20,9 +25,18 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
   const student = await getStudent(id);
   if (!student) notFound();
 
+  const project = student.project_id
+    ? await getProject(student.project_id)
+    : null;
   const documents = await listStudentDocuments(id);
   await ensureTemplatesSeeded();
-  const templates = await listDocTemplates();
+  const allTemplates = await listDocTemplates();
+  const allowed = new Set(
+    project ? availableStudentTemplateIds(project) : [],
+  );
+  const templates = allTemplates.filter(
+    (t) => t.scope === "student" && (!project || allowed.has(t.id)),
+  );
 
   const name = [
     student.first_name,
@@ -36,14 +50,22 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <div>
-        <Link href="/admin" className="text-sm font-medium text-[var(--navy)] hover:underline">
-          ← All students
+        <Link
+          href={project ? `/admin/projects/${project.id}` : "/admin"}
+          className="text-sm font-medium text-[var(--navy)] hover:underline"
+        >
+          ← {project ? project.name : "Projects"}
         </Link>
         <h1 className="mt-2 text-3xl font-extrabold text-[var(--navy)]">
           {name}
         </h1>
         <p className="text-sm text-[var(--mint-text)]">
           Verification: {student.id_verification_status}
+          {project
+            ? ` · ${projectTypeLabel(project.type)} · travel declaration: ${
+                student.needs_travel_declaration ? "yes" : "no"
+              }`
+            : ""}
         </p>
       </div>
 
@@ -56,7 +78,10 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
               ["Phone", student.phone],
               ["Birth date", student.birth_date],
               ["Nationality", student.nationality],
-              ["Document", `${student.document_type} · ${student.document_country}`],
+              [
+                "Document",
+                `${student.document_type} · ${student.document_country}`,
+              ],
               ["Document number", student.document_number],
             ]}
           />

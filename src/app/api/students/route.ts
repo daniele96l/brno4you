@@ -72,7 +72,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error }, { status: 400 });
     }
 
-    const student = createStudentFromForm(data);
+    const projectId =
+      typeof form.get("project_id") === "string"
+        ? String(form.get("project_id"))
+        : (data as { project_id?: string }).project_id;
+    // project_id may be embedded in JSON payload
+    const payload = JSON.parse(String(form.get("data"))) as {
+      project_id?: string;
+    };
+    const resolvedProjectId = payload.project_id || projectId;
+    if (!resolvedProjectId) {
+      return NextResponse.json(
+        { error: "project_id required — use a project invite link" },
+        { status: 400 },
+      );
+    }
+
+    const student = createStudentFromForm(data, resolvedProjectId);
     const files = await handleFiles(student.id, form, true);
 
     if (data.document_type === "id_card" && !files.id_back_path) {

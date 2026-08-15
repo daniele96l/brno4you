@@ -1,20 +1,21 @@
 import { rpc } from "../supabase";
 import type { Student } from "../types";
 import type { Partner } from "../partners";
+import type { MobilityProject } from "../projects";
 
-export type ProjectSettings = {
-  id: string;
-  project_name: string;
-  accreditation_no: string;
-  project_no: string;
-  project_period: string;
-  dates: string;
-  venue: string;
-  coordinator_name: string;
-  coordinator_email: string;
-  coordinator_phone: string;
-  updated_at: string;
-};
+/** Settings-shaped fields used in document placeholders. */
+export type ProjectSettings = Pick<
+  MobilityProject,
+  | "project_name"
+  | "accreditation_no"
+  | "project_no"
+  | "project_period"
+  | "dates"
+  | "venue"
+  | "coordinator_name"
+  | "coordinator_email"
+  | "coordinator_phone"
+> & { id?: string; updated_at?: string };
 
 export type DocTemplate = {
   id: string;
@@ -25,16 +26,40 @@ export type DocTemplate = {
   updated_at: string;
 };
 
-export async function getProjectSettings(): Promise<ProjectSettings> {
-  return rpc<ProjectSettings>("brno4you_get_project_settings", {});
+export function settingsFromProject(project: MobilityProject): ProjectSettings {
+  return {
+    id: project.id,
+    project_name: project.project_name || project.name,
+    accreditation_no: project.accreditation_no,
+    project_no: project.project_no,
+    project_period: project.project_period,
+    dates: project.dates,
+    venue: project.venue,
+    coordinator_name: project.coordinator_name,
+    coordinator_email: project.coordinator_email,
+    coordinator_phone: project.coordinator_phone,
+    updated_at: project.updated_at,
+  };
 }
 
-export async function saveProjectSettings(
-  settings: Partial<ProjectSettings>,
-): Promise<ProjectSettings> {
-  return rpc<ProjectSettings>("brno4you_upsert_project_settings", {
-    p_settings: settings,
-  });
+/** @deprecated Prefer project-scoped settings via getProject + settingsFromProject */
+export async function getProjectSettings(): Promise<ProjectSettings> {
+  const { listProjects } = await import("../projects");
+  const projects = await listProjects();
+  if (projects[0]) return settingsFromProject(projects[0]);
+  return {
+    id: "default",
+    project_name: "",
+    accreditation_no: "",
+    project_no: "",
+    project_period: "",
+    dates: "",
+    venue: "",
+    coordinator_name: "",
+    coordinator_email: "",
+    coordinator_phone: "",
+    updated_at: new Date().toISOString(),
+  };
 }
 
 export async function listDocTemplates(): Promise<DocTemplate[]> {

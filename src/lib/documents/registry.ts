@@ -1,12 +1,14 @@
 import type { DocumentTemplate } from "./types";
 import type { Student } from "../types";
 import type { Partner } from "../partners";
+import type { MobilityProject } from "../projects";
+import { getProject } from "../projects";
 import { textToPdf } from "./pdf";
 import {
   buildPlaceholderMap,
   fillTemplate,
   getDocTemplate,
-  getProjectSettings,
+  settingsFromProject,
   studentFullName,
 } from "./templates";
 import { studentSummaryTemplate } from "./student-summary";
@@ -28,6 +30,7 @@ export async function generateFromDbTemplate(
   templateId: string,
   student: Student | null,
   partner: Partner | null = null,
+  project?: MobilityProject | null,
 ) {
   const template = await getDocTemplate(templateId);
   if (!template) throw new Error("Unknown template");
@@ -36,7 +39,14 @@ export async function generateFromDbTemplate(
     throw new Error("This template requires a student");
   }
 
-  const settings = await getProjectSettings();
+  let resolved = project || null;
+  if (!resolved) {
+    const projectId = student?.project_id || partner?.project_id;
+    if (projectId) resolved = await getProject(projectId);
+  }
+  if (!resolved) throw new Error("Project not found for document generation");
+
+  const settings = settingsFromProject(resolved);
   const filled = fillTemplate(
     template.body,
     buildPlaceholderMap(settings, student, partner),
