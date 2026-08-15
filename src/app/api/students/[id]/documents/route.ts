@@ -1,14 +1,74 @@
 import { NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/auth";
-import { listStudentDocuments } from "@/lib/students";
+import { canAccessStudent } from "@/lib/auth";
+import { ensureStudentDocuments } from "@/lib/documents/ensure";
+import { getStudent } from "@/lib/students";
+import { getProject, requiredStudentTemplateIds } from "@/lib/projects";
+import { listDocTemplates } from "@/lib/documents/templates";
+
+export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
-  if (!(await isAdminAuthenticated())) {
+  const { id } = await ctx.params;
+  if (!(await canAccessStudent(id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { id } = await ctx.params;
+  const student = await getStudent(id);
+  if (!student) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { listStudentDocuments } = await import("@/lib/students");
   const documents = await listStudentDocuments(id);
-  return NextResponse.json({ documents });
+  const project = student.project_id
+    ? await getProject(student.project_id)
+    : null;
+  const required = project
+    ? requiredStudentTemplateIds(project, student)
+    : [];
+  const templates = await listDocTemplates();
+
+  return NextResponse.json({
+    documents,
+    requiredTemplateIds: required,
+    templates: templates.map((t) => ({
+      id: t.id,
+      label: t.label,
+      scope: t.scope,
+    })),
+    project,
+    verified:
+      student.id_verification_status === "matched" ||
+      student.id_verification_status === "mismatch_dismissed",
+  });
+}
+
+export async function POST(_req: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
+  if (!(await canAccessStudent(id))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const student = await getStudent(id);
+  if (!student) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const verified =
+    student.id_verification_status === "matched" ||
+    student.id_verification_status === "mismatch_dismissed";
+  if (!verified) {
+    return NextResponse.json(
+      { error: "Complete ID verification before generating documents" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const documents = await ensureStudentDocuments(student);
+    return NextResponse.json({ documents });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Ensure failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }

@@ -68,10 +68,23 @@ export function ProjectDashboard({
   const coverage = useMemo(() => {
     return students.map((s) => {
       const required = requiredStudentTemplateIds(project, s);
-      const done = required.filter((tid) =>
+      const generated = required.filter((tid) =>
         docs.some((d) => d.student_id === s.id && d.template_id === tid),
       ).length;
-      return { id: s.id, done, total: required.length };
+      const signed = required.filter((tid) =>
+        docs.some(
+          (d) =>
+            d.student_id === s.id &&
+            d.template_id === tid &&
+            d.status === "signed",
+        ),
+      ).length;
+      return {
+        id: s.id,
+        generated,
+        signed,
+        total: required.length,
+      };
     });
   }, [students, docs, project]);
 
@@ -220,11 +233,13 @@ export function ProjectDashboard({
 
       {tab === "participants" && (
         <div className="panel overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="border-b border-[var(--line)] text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Docs</th>
+                <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Generated</th>
+                <th className="px-4 py-3 font-medium">Signed</th>
                 <th className="px-4 py-3 font-medium">Travel declaration</th>
                 <th className="px-4 py-3 font-medium">Move to</th>
               </tr>
@@ -232,13 +247,17 @@ export function ProjectDashboard({
             <tbody>
               {students.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-[var(--muted)]">
+                  <td colSpan={6} className="px-4 py-8 text-[var(--muted)]">
                     No participants yet. Share the invite link.
                   </td>
                 </tr>
               )}
               {students.map((s) => {
-                const c = coverageMap[s.id] || { done: 0, total: 0 };
+                const c = coverageMap[s.id] || {
+                  generated: 0,
+                  signed: 0,
+                  total: 0,
+                };
                 return (
                   <tr
                     key={s.id}
@@ -253,8 +272,24 @@ export function ProjectDashboard({
                       </Link>
                       <div className="text-xs text-[var(--muted)]">{s.email}</div>
                     </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          s.id_verification_status === "matched"
+                            ? "bg-emerald-100 text-emerald-900"
+                            : s.id_verification_status === "mismatch_dismissed"
+                              ? "bg-orange-100 text-orange-900"
+                              : "bg-amber-100 text-amber-900"
+                        }`}
+                      >
+                        {s.id_verification_status}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 tabular-nums">
-                      {c.done}/{c.total}
+                      {c.generated}/{c.total}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {c.signed}/{c.total}
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -403,6 +438,13 @@ export function ProjectDashboard({
                     );
                     const required = requiredStudentTemplateIds(project, s);
                     const needed = required.includes(docTemplateId);
+                    const statusLabel = !doc
+                      ? needed
+                        ? "missing"
+                        : "—"
+                      : doc.status === "signed"
+                        ? "signed"
+                        : "generated";
                     return (
                       <tr
                         key={s.id}
@@ -417,14 +459,19 @@ export function ProjectDashboard({
                           )}
                         </td>
                         <td className="py-3 pr-3">
-                          {doc ? "done" : needed ? "missing" : "—"}
+                          {statusLabel}
+                          {doc?.signed_at && (
+                            <div className="text-xs text-[var(--muted)]">
+                              {new Date(doc.signed_at).toLocaleString()}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3">
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               className="btn-secondary"
-                              disabled={loading}
+                              disabled={loading || doc?.status === "signed"}
                               onClick={() => generate(s.id, docTemplateId)}
                             >
                               {doc ? "Regenerate" : "Generate"}

@@ -9,6 +9,7 @@ import {
   type StudentFormInput,
 } from "@/lib/student-schema";
 import type { FieldMismatch, Student } from "@/lib/types";
+import { ParticipantDocuments } from "@/components/ParticipantDocuments";
 
 type Props = {
   initial?: Student | null;
@@ -153,8 +154,14 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
     if (res.ok) {
       setStudent(json.student);
       setMismatches(null);
+      setMatchOk(true);
     }
   }
+
+  const verified =
+    matchOk ||
+    student?.id_verification_status === "matched" ||
+    student?.id_verification_status === "mismatch_dismissed";
 
   return (
     <div className="space-y-8">
@@ -286,8 +293,7 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
 
       {matchOk && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Your details match the ID document. You can close this page — an
-          administrator will review your application.
+          Your details match the ID document. Please sign the documents below.
         </div>
       )}
 
@@ -324,8 +330,13 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
 
       {student?.id_verification_status === "mismatch_dismissed" && (
         <p className="text-sm text-[var(--muted)]">
-          Mismatch dismissed. An administrator can still review the ID vs your data.
+          Mismatch dismissed. You can still sign your documents below; an
+          administrator can review the ID vs your data.
         </p>
+      )}
+
+      {student && (
+        <ParticipantDocuments student={student} unlocked={!!verified} />
       )}
     </div>
   );

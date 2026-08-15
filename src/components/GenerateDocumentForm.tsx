@@ -65,6 +65,9 @@ export function GenerateDocumentForm({
         <div className="grid gap-2 sm:grid-cols-2">
           {studentTemplates.map((t) => {
             const done = documents.some((d) => d.template_id === t.id);
+            const signed = documents.some(
+              (d) => d.template_id === t.id && d.status === "signed",
+            );
             return (
               <button
                 key={t.id}
@@ -80,7 +83,7 @@ export function GenerateDocumentForm({
                 <div
                   className={`mt-1 text-xs ${selectedId === t.id ? "text-white/80" : "text-[var(--mint-text)]"}`}
                 >
-                  {done ? "Generated" : "Not generated yet"}
+                  {signed ? "Signed" : done ? "Generated" : "Not generated yet"}
                 </div>
               </button>
             );
@@ -92,15 +95,17 @@ export function GenerateDocumentForm({
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4">
           <h3 className="font-bold text-[var(--navy)]">{selected.label}</h3>
           <p className="mt-1 text-[var(--mint-text)]">
-            {existing
-              ? `Last generated ${new Date(existing.created_at).toLocaleString()}`
-              : "Ready to generate for this student."}
+            {existing?.status === "signed"
+              ? `Signed ${existing.signed_at ? new Date(existing.signed_at).toLocaleString() : ""} by ${existing.signer_name || "participant"}`
+              : existing
+                ? `Last generated ${new Date(existing.created_at).toLocaleString()}`
+                : "Ready to generate for this student."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               className="btn-primary"
-              disabled={loading}
+              disabled={loading || existing?.status === "signed"}
               onClick={generate}
             >
               {loading
@@ -141,7 +146,11 @@ export function GenerateDocumentForm({
               <span>
                 {d.filename}{" "}
                 <span className="text-[var(--muted)]">
-                  ({new Date(d.created_at).toLocaleString()})
+                  ({d.status}
+                  {d.signed_at
+                    ? ` · ${new Date(d.signed_at).toLocaleString()}`
+                    : ` · ${new Date(d.created_at).toLocaleString()}`}
+                  )
                 </span>
               </span>
               <a

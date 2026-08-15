@@ -77,6 +77,11 @@ export async function POST(req: Request) {
       mime: result.mime,
       storage_path,
       created_at: generatedAt,
+      status: "generated" as const,
+      signed_at: null,
+      signer_name: null,
+      signature_path: null,
+      signed_storage_path: null,
     };
     await saveDocument(doc);
 

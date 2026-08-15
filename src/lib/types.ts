@@ -62,4 +62,9 @@ export type GeneratedDocument = {
   mime: string;
   storage_path: string;
   created_at: string;
+  status: "generated" | "signed";
+  signed_at: string | null;
+  signer_name: string | null;
+  signature_path: string | null;
+  signed_storage_path: string | null;
 };
