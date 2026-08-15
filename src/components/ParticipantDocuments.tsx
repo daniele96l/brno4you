@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GeneratedDocument, Student } from "@/lib/types";
 
 type TemplateItem = { id: string; label: string };
@@ -18,7 +18,8 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signingId, setSigningId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [signingOpen, setSigningOpen] = useState(false);
   const [signerName, setSignerName] = useState(
     `${student.first_name} ${student.surname}`.trim(),
   );
@@ -57,6 +58,8 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
         return;
       }
       setDocs(json.documents || []);
+      if (json.signableTemplateIds) setSignableIds(json.signableTemplateIds);
+      if (json.requiredTemplateIds) setRequired(json.requiredTemplateIds);
       await load();
       sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     })();
@@ -69,6 +72,26 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   function docFor(templateId: string) {
     return docs.find((d) => d.template_id === templateId);
   }
+
+  // Focus first unsigned document
+  useEffect(() => {
+    if (!signableIds.length) return;
+    const idx = signableIds.findIndex((tid) => {
+      const d = docs.find((x) => x.template_id === tid);
+      return !d || d.status !== "signed";
+    });
+    if (idx >= 0) setActiveIndex(idx);
+  }, [signableIds, docs]);
+
+  const currentId = signableIds[activeIndex];
+  const currentDoc = currentId ? docFor(currentId) : undefined;
+  const allSigned = useMemo(
+    () =>
+      signableIds.length > 0 &&
+      signableIds.every((tid) => docFor(tid)?.status === "signed"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signableIds, docs],
+  );
 
   function setupCanvas() {
     const canvas = canvasRef.current;
@@ -83,10 +106,8 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   }
 
   useEffect(() => {
-    if (signingId) {
-      requestAnimationFrame(setupCanvas);
-    }
-  }, [signingId]);
+    if (signingOpen) requestAnimationFrame(setupCanvas);
+  }, [signingOpen]);
 
   function pointerPos(
     e: React.PointerEvent<HTMLCanvasElement>,
@@ -123,11 +144,11 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   }
 
   async function confirmSign() {
-    if (!signingId || !canvasRef.current) return;
+    if (!currentDoc || !canvasRef.current) return;
     setLoading(true);
     setError(null);
     const signaturePngBase64 = canvasRef.current.toDataURL("image/png");
-    const res = await fetch(`/api/documents/${signingId}/sign`, {
+    const res = await fetch(`/api/documents/${currentDoc.id}/sign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ signerName, signaturePngBase64 }),
@@ -138,47 +159,39 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
       setError(json.error || "Sign failed");
       return;
     }
-    setSigningId(null);
+    setSigningOpen(false);
     await load();
+    // Move to next unsigned
+    const next = signableIds.findIndex((tid, i) => {
+      if (i <= activeIndex) return false;
+      const d = docs.find((x) => x.template_id === tid);
+      // after reload we'll recompute; optimistic: go to next index
+      return !d || d.status !== "signed" || tid !== currentId;
+    });
+    if (next >= 0) setActiveIndex(next);
+    else setActiveIndex(Math.min(activeIndex + 1, signableIds.length - 1));
   }
 
   if (!unlocked) {
-    return (
-      <div
-        ref={sectionRef}
-        className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-4 text-sm text-[var(--navy)]"
-      >
-        After you submit and your ID is verified, you will sign each document
-        and declaration here (preview → draw signature → confirm).
-      </div>
-    );
+    return null;
   }
 
-  const signingDoc = signingId
-    ? docs.find((d) => d.id === signingId)
-    : null;
-
-  const signedRequired = required.filter((tid) => {
-    const d = docFor(tid);
-    return d?.status === "signed";
-  }).length;
+  const signedCount = signableIds.filter(
+    (tid) => docFor(tid)?.status === "signed",
+  ).length;
 
   return (
     <div ref={sectionRef} className="space-y-4 scroll-mt-8">
       <div>
         <h2 className="text-lg font-bold text-[var(--navy)]">
-          Documents to sign
+          Sign with your verified ID
         </h2>
         <p className="text-sm text-[var(--mint-text)]">
-          ID verified. Preview each PDF, then click Sign — draw your signature
-          and type your full name.
-          {required.length > 0 && (
-            <>
-              {" "}
-              Progress: {signedRequired}/{required.length} required signed
-              {loading ? " · preparing…" : ""}.
-            </>
-          )}
+          Your ID was checked. Sign one document at a time
+          {signableIds.length
+            ? ` (${signedCount}/${signableIds.length} done)`
+            : ""}
+          {loading ? " · preparing PDFs…" : ""}.
         </p>
       </div>
 
@@ -188,91 +201,148 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
         </p>
       )}
 
-      <ul className="space-y-3">
-        {signableIds.map((tid) => {
+      {allSigned ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          All documents are signed. You can close this page.
+        </div>
+      ) : (
+        currentId && (
+          <div className="space-y-4 rounded-2xl border-2 border-[var(--navy)] bg-white px-4 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                Document {activeIndex + 1} of {signableIds.length}
+              </p>
+              {required.includes(currentId) ? (
+                <span className="text-xs font-semibold text-[var(--navy)]">
+                  Required
+                </span>
+              ) : (
+                <span className="text-xs text-[var(--muted)]">Optional</span>
+              )}
+            </div>
+            <h3 className="text-xl font-extrabold text-[var(--navy)]">
+              {labelFor(currentId)}
+            </h3>
+            <p className="text-sm text-[var(--mint-text)]">
+              Filled with your application data and linked to the ID you
+              uploaded.
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              {currentDoc && (
+                <a
+                  className="btn-secondary"
+                  href={`/api/documents/${currentDoc.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  1. Preview PDF
+                </a>
+              )}
+              {currentDoc && currentDoc.status !== "signed" && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={loading || !currentDoc}
+                  onClick={() => {
+                    setSignerName(
+                      `${student.first_name} ${student.surname}`.trim(),
+                    );
+                    setSigningOpen(true);
+                  }}
+                >
+                  2. Sign this document
+                </button>
+              )}
+              {currentDoc?.status === "signed" && (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-900">
+                  Signed
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={activeIndex === 0}
+                onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={activeIndex >= signableIds.length - 1}
+                onClick={() =>
+                  setActiveIndex((i) =>
+                    Math.min(signableIds.length - 1, i + 1),
+                  )
+                }
+              >
+                Next document
+              </button>
+            </div>
+          </div>
+        )
+      )}
+
+      <ol className="space-y-2">
+        {signableIds.map((tid, i) => {
           const d = docFor(tid);
-          const isRequired = required.includes(tid);
-          const status = !d
-            ? loading
-              ? "Preparing…"
-              : "Not ready"
-            : d.status === "signed"
-              ? "Signed"
-              : "Ready to sign";
+          const signed = d?.status === "signed";
+          const isActive = i === activeIndex && !allSigned;
           return (
-            <li
-              key={tid}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] px-4 py-3"
-            >
-              <div>
-                <div className="font-medium text-[var(--navy)]">
+            <li key={tid}>
+              <button
+                type="button"
+                onClick={() => setActiveIndex(i)}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm ${
+                  isActive
+                    ? "border-[var(--navy)] bg-[var(--sky)]/50"
+                    : "border-[var(--line)] bg-white"
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    signed
+                      ? "bg-emerald-600 text-white"
+                      : isActive
+                        ? "bg-[var(--navy)] text-white"
+                        : "bg-[var(--sky)] text-[var(--navy)]"
+                  }`}
+                >
+                  {signed ? "✓" : i + 1}
+                </span>
+                <span className="font-medium text-[var(--navy)]">
                   {labelFor(tid)}
-                  {isRequired ? (
-                    <span className="ml-2 text-xs font-semibold text-[var(--mint-text)]">
-                      Required
-                    </span>
-                  ) : (
-                    <span className="ml-2 text-xs text-[var(--muted)]">
-                      Optional
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-[var(--mint-text)]">{status}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {d && (
-                  <a
-                    className="btn-secondary"
-                    href={`/api/documents/${d.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Preview
-                  </a>
-                )}
-                {d && d.status !== "signed" && (
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={loading}
-                    onClick={() => {
-                      setSignerName(
-                        `${student.first_name} ${student.surname}`.trim(),
-                      );
-                      setSigningId(d.id);
-                    }}
-                  >
-                    Sign
-                  </button>
-                )}
-              </div>
+                </span>
+                <span className="ml-auto text-xs text-[var(--muted)]">
+                  {signed ? "Signed" : d ? "Ready" : "Preparing…"}
+                </span>
+              </button>
             </li>
           );
         })}
-        {signableIds.length === 0 && !loading && (
-          <li className="text-sm text-[var(--muted)]">
-            Preparing your documents…
-          </li>
-        )}
-      </ul>
+      </ol>
 
-      {signingDoc && (
+      {signingOpen && currentDoc && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-lg font-bold text-[var(--navy)]">
-              Sign: {labelFor(signingDoc.template_id)}
+              Sign: {labelFor(currentDoc.template_id)}
             </h3>
             <p className="text-sm text-[var(--mint-text)]">
-              Open the PDF, read it, then draw your signature and type your name
-              to confirm.
+              Your identity was verified with the ID you uploaded. Draw your
+              signature and type your full name.
             </p>
             <a
               className="btn-secondary inline-flex"
-              href={`/api/documents/${signingDoc.id}`}
+              href={`/api/documents/${currentDoc.id}`}
               target="_blank"
               rel="noreferrer"
             >
-              Open PDF to review
+              Open PDF again
             </a>
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-[var(--navy)]">
@@ -320,7 +390,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => setSigningId(null)}
+                onClick={() => setSigningOpen(false)}
               >
                 Cancel
               </button>

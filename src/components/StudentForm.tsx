@@ -10,14 +10,22 @@ import {
 } from "@/lib/student-schema";
 import type { FieldMismatch, Student } from "@/lib/types";
 import { ParticipantDocuments } from "@/components/ParticipantDocuments";
+import { DocumentsToSignPreview } from "@/components/DocumentsToSignPreview";
+import type { ProjectType } from "@/lib/project-packs";
 
 type Props = {
   initial?: Student | null;
   projectId?: string;
   projectTitle?: string;
+  projectType?: ProjectType;
 };
 
-export function StudentForm({ initial, projectId, projectTitle }: Props) {
+export function StudentForm({
+  initial,
+  projectId,
+  projectTitle,
+  projectType = "youth_exchange",
+}: Props) {
   const router = useRouter();
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
@@ -60,6 +68,7 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
   const hasSecondName = watch("has_second_name");
   const hasSecondSurname = watch("has_second_surname");
   const documentType = watch("document_type");
+  const birthDate = watch("birth_date");
 
   useEffect(() => {
     if (!hasSecondName) setValue("second_name", "");
@@ -278,6 +287,14 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
           </p>
         )}
 
+        <DocumentsToSignPreview
+          projectType={projectType}
+          birthDate={birthDate}
+          needsTravelDeclaration={
+            student?.needs_travel_declaration ?? false
+          }
+        />
+
         <button
           type="submit"
           disabled={submitting || verifying}
@@ -286,7 +303,7 @@ export function StudentForm({ initial, projectId, projectTitle }: Props) {
           {submitting || verifying
             ? "Saving & verifying…"
             : student
-              ? "Update & re-verify"
+              ? "Update & re-verify ID"
               : "Submit & verify ID"}
         </button>
       </form>

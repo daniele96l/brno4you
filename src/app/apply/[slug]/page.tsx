@@ -37,6 +37,7 @@ export default async function ApplyToProjectPage({ params }: Props) {
         <StudentForm
           projectId={project.id}
           projectTitle={project.name}
+          projectType={project.type}
         />
       </div>
     </div>
