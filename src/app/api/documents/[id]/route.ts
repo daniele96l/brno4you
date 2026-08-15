@@ -17,13 +17,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (
-    doc.storage_path.startsWith("http://") ||
-    doc.storage_path.startsWith("https://")
-  ) {
-    return NextResponse.redirect(doc.storage_path);
-  }
-
   const buf = await readUpload(doc.storage_path);
   return new NextResponse(new Uint8Array(buf), {
     headers: {

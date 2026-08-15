@@ -28,11 +28,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
-  // Redirect to blob URL if public blob
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return NextResponse.redirect(path);
-  }
-
   const buf = await readUpload(path);
   const ext = path.split(".").pop()?.toLowerCase();
   const type =

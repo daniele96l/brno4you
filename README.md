@@ -5,37 +5,30 @@ Erasmus student registration portal for **Verno4U**: collect personal data, uplo
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind
-- Redis (`REDIS_URL`) for students, sessions, document metadata
-- Local `uploads/` in development; **Vercel Blob** when `BLOB_READ_WRITE_TOKEN` is set
+- **Supabase** (shared free project `Blacktesto db`) — Postgres tables `verno4u_*` + SECURITY DEFINER RPCs; files in `verno4u_files`
 - OpenAI Vision (`gpt-4o-mini`) for cheap ID field extraction
-
-No Supabase.
+- No Redis / no Vercel KV
 
 ## Setup
 
 ```bash
 cp .env.example .env.local
-# set REDIS_URL, OPENAI_API_KEY, ADMIN_PASSWORD, SESSION_SECRET
+# fill URL, anon key, VERNO4U_SERVER_SECRET (must match DB verno4u_config.server_secret),
+# ADMIN_PASSWORD, SESSION_SECRET, OPENAI_API_KEY
 npm install
 npm run dev
 ```
-
-Without `REDIS_URL`, an in-memory store is used (data resets on restart).
-
-### Redis
-
-Local: `redis-server` and `REDIS_URL=redis://127.0.0.1:6379`  
-Production (Vercel): use [Upstash](https://upstash.com) and paste the Redis URL (`rediss://...`).
 
 ### Env vars
 
 | Variable | Purpose |
 |----------|---------|
-| `REDIS_URL` | Redis connection |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon/publishable key (server uses RPCs only) |
+| `VERNO4U_SERVER_SECRET` | Shared secret for `verno4u_*` RPCs |
 | `OPENAI_API_KEY` | ID verification |
 | `ADMIN_PASSWORD` | Admin login |
 | `SESSION_SECRET` | Cookie session hashing |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (production uploads) |
 
 ## Flows
 
@@ -48,4 +41,4 @@ Add a generator under `src/lib/documents/` and register it in `src/lib/documents
 
 ## Deploy
 
-Push to [github.com/daniele96l/brno4you](https://github.com/daniele96l/brno4you) and deploy on Vercel with the env vars above.
+Repo: [github.com/daniele96l/brno4you](https://github.com/daniele96l/brno4you) · Live: [brno4you.vercel.app](https://brno4you.vercel.app)

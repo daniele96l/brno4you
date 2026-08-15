@@ -1,57 +1,31 @@
-import { put, del } from "@vercel/blob";
 import { createHash } from "crypto";
-import { mkdir, writeFile, readFile, unlink } from "fs/promises";
-import path from "path";
-
-const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
-
-function useBlob() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-}
+import { rpc } from "./supabase";
 
 export async function saveUpload(
   relativeKey: string,
   data: Buffer,
   contentType: string,
 ): Promise<string> {
-  if (useBlob()) {
-    const blob = await put(relativeKey, data, {
-      access: "public",
-      contentType,
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
-    return blob.url;
-  }
-
-  const full = path.join(UPLOAD_ROOT, relativeKey);
-  await mkdir(path.dirname(full), { recursive: true });
-  await writeFile(full, data);
+  await rpc("verno4u_put_file_b64", {
+    p_path: relativeKey,
+    p_content_b64: data.toString("base64"),
+    p_content_type: contentType,
+  });
   return relativeKey;
 }
 
 export async function readUpload(storagePath: string): Promise<Buffer> {
-  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
-    const res = await fetch(storagePath);
-    if (!res.ok) throw new Error("Failed to fetch blob");
-    return Buffer.from(await res.arrayBuffer());
-  }
-  const full = path.join(UPLOAD_ROOT, storagePath);
-  return readFile(full);
+  const file = await rpc<{
+    path: string;
+    content_type: string;
+    content_base64: string;
+  } | null>("verno4u_get_file", { p_path: storagePath });
+  if (!file?.content_base64) throw new Error("File not found");
+  return Buffer.from(file.content_base64, "base64");
 }
 
-export async function deleteUpload(storagePath: string | null | undefined) {
-  if (!storagePath) return;
-  try {
-    if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
-      await del(storagePath, { token: process.env.BLOB_READ_WRITE_TOKEN });
-      return;
-    }
-    await unlink(path.join(UPLOAD_ROOT, storagePath));
-  } catch {
-    // ignore missing files
-  }
+export async function deleteUpload(_storagePath: string | null | undefined) {
+  // optional; not required for v1
 }
 
 export function fileHash(buf: Buffer) {

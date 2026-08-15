@@ -1,30 +1,53 @@
-import { getRedis, keys } from "./redis";
+import { rpc } from "./supabase";
 import type { GeneratedDocument, Student } from "./types";
 import type { StudentFormInput } from "./student-schema";
 import { randomId } from "./auth";
 
+function mapStudent(raw: Record<string, unknown> | null): Student | null {
+  if (!raw) return null;
+  return {
+    id: String(raw.id),
+    first_name: String(raw.first_name),
+    has_second_name: Boolean(raw.has_second_name),
+    second_name: (raw.second_name as string) ?? null,
+    surname: String(raw.surname),
+    has_second_surname: Boolean(raw.has_second_surname),
+    second_surname: (raw.second_surname as string) ?? null,
+    birth_date: String(raw.birth_date).slice(0, 10),
+    nationality: String(raw.nationality),
+    email: String(raw.email),
+    phone: String(raw.phone),
+    document_type: raw.document_type as Student["document_type"],
+    document_number: String(raw.document_number),
+    document_country: String(raw.document_country),
+    id_front_path: (raw.id_front_path as string) ?? null,
+    id_back_path: (raw.id_back_path as string) ?? null,
+    id_front_hash: (raw.id_front_hash as string) ?? null,
+    id_back_hash: (raw.id_back_hash as string) ?? null,
+    id_verification_status:
+      raw.id_verification_status as Student["id_verification_status"],
+    id_extracted: (raw.id_extracted as Student["id_extracted"]) ?? null,
+    id_mismatches: (raw.id_mismatches as Student["id_mismatches"]) ?? null,
+    id_verified_at: (raw.id_verified_at as string) ?? null,
+    created_at: String(raw.created_at),
+    updated_at: String(raw.updated_at),
+  };
+}
+
 export async function saveStudent(student: Student) {
-  const redis = getRedis();
-  await redis.set(keys.student(student.id), JSON.stringify(student));
-  await redis.zadd(keys.studentsIndex, Date.parse(student.created_at), student.id);
-  await redis.set(keys.studentsEmail(student.email), student.id);
+  await rpc("verno4u_upsert_student", { p_student: student });
 }
 
 export async function getStudent(id: string): Promise<Student | null> {
-  const raw = await getRedis().get(keys.student(id));
-  if (!raw) return null;
-  return JSON.parse(raw) as Student;
+  const data = await rpc<Record<string, unknown> | null>("verno4u_get_student", {
+    p_id: id,
+  });
+  return mapStudent(data);
 }
 
 export async function listStudents(): Promise<Student[]> {
-  const redis = getRedis();
-  const ids = await redis.zrevrange(keys.studentsIndex, 0, -1);
-  const students: Student[] = [];
-  for (const id of ids) {
-    const s = await getStudent(id);
-    if (s) students.push(s);
-  }
-  return students;
+  const data = await rpc<Record<string, unknown>[]>("verno4u_list_students", {});
+  return (data || []).map((r) => mapStudent(r)!).filter(Boolean);
 }
 
 export function createStudentFromForm(data: StudentFormInput): Student {
@@ -57,7 +80,10 @@ export function createStudentFromForm(data: StudentFormInput): Student {
   };
 }
 
-export function applyFormToStudent(student: Student, data: StudentFormInput): Student {
+export function applyFormToStudent(
+  student: Student,
+  data: StudentFormInput,
+): Student {
   return {
     ...student,
     first_name: data.first_name,
@@ -78,24 +104,18 @@ export function applyFormToStudent(student: Student, data: StudentFormInput): St
 }
 
 export async function saveDocument(doc: GeneratedDocument) {
-  const redis = getRedis();
-  await redis.set(keys.doc(doc.id), JSON.stringify(doc));
-  await redis.sadd(keys.studentDocs(doc.student_id), doc.id);
+  await rpc("verno4u_save_document", { p_doc: doc });
 }
 
-export async function getDocument(id: string): Promise<GeneratedDocument | null> {
-  const raw = await getRedis().get(keys.doc(id));
-  if (!raw) return null;
-  return JSON.parse(raw) as GeneratedDocument;
+export async function getDocument(
+  id: string,
+): Promise<GeneratedDocument | null> {
+  return rpc<GeneratedDocument | null>("verno4u_get_document", { p_id: id });
 }
 
 export async function listStudentDocuments(studentId: string) {
-  const redis = getRedis();
-  const ids = await redis.smembers(keys.studentDocs(studentId));
-  const docs: GeneratedDocument[] = [];
-  for (const id of ids) {
-    const d = await getDocument(id);
-    if (d) docs.push(d);
-  }
-  return docs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const docs = await rpc<GeneratedDocument[]>("verno4u_list_documents", {
+    p_student_id: studentId,
+  });
+  return docs || [];
 }
