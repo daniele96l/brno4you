@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { listProjects, projectTypeLabel } from "@/lib/projects";
 import { ensureSampleDataSeeded } from "@/lib/partners";
 
 export default async function ApplyIndexPage() {
+  // Always load at request time — admin-created projects must appear immediately.
+  await connection();
   await ensureSampleDataSeeded();
   const projects = await listProjects();
 
