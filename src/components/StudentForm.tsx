@@ -844,7 +844,7 @@ export function StudentForm({
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (submitting || verifying) return;
+          if (submitting || verifying || converting) return;
           // Avoid iOS scroll-to-focused-field when the keyboard dismisses on submit
           try {
             (document.activeElement as HTMLElement | null)?.blur?.();
@@ -1070,9 +1070,11 @@ export function StudentForm({
                   setFrontFile(f);
                   setConverting(true);
                   try {
-                    setFrontFile(await normalizeImageFile(f));
+                    const jpeg = await normalizeImageFile(f);
+                    setFrontFile(jpeg);
+                    setFrontError(null);
                   } catch (err) {
-                    // Keep raw file — submit will retry convert with a clear error
+                    // Keep raw file — submit retries convert (incl. server path)
                     setFrontError(
                       err instanceof Error && err.message.trim()
                         ? err.message
@@ -1109,7 +1111,9 @@ export function StudentForm({
                     setBackFile(f);
                     setConverting(true);
                     try {
-                      setBackFile(await normalizeImageFile(f));
+                      const jpeg = await normalizeImageFile(f);
+                      setBackFile(jpeg);
+                      setBackError(null);
                     } catch (err) {
                       setBackError(
                         err instanceof Error && err.message.trim()
@@ -1170,7 +1174,7 @@ export function StudentForm({
 
         <button
           type="submit"
-          disabled={submitting || verifying}
+          disabled={submitting || verifying || converting}
           className="btn-primary"
         >
           {converting

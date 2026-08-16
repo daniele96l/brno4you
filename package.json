@@ -11,7 +11,8 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.0",
     "@supabase/supabase-js": "^2.109.0",
-    "heic2any": "^0.0.4",
+    "heic-to": "^1.5.2",
+    "libheif-js": "^1.19.8",
     "nanoid": "^5.1.16",
     "next": "16.3.1",
     "openai": "^6.49.0",

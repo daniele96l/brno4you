@@ -4,8 +4,8 @@ import type { ExtractedIdData, FieldMismatch, Student } from "./types";
 import { valuesMatch } from "./normalize";
 import {
   HEIC_UPLOAD_ERROR,
-  isHeicBuffer,
   isHeicDecodeError,
+  normalizeIdImageBuffer,
 } from "./normalize-id-image";
 
 /** Minimum OCR fields that must be present and agree before status is matched. */
@@ -15,18 +15,21 @@ export const MIN_ID_FIELD_AGREEMENTS = 3;
 export const MIN_ID_OCR_CONFIDENCE = 0.5;
 
 async function downscale(buf: Buffer): Promise<Buffer> {
-  if (isHeicBuffer(buf)) {
-    throw new Error(HEIC_UPLOAD_ERROR);
-  }
   try {
-    return await sharp(buf, { unlimited: true, failOn: "none" })
+    const normalized = await normalizeIdImageBuffer(buf);
+    return sharp(normalized.buffer, { unlimited: true, failOn: "none" })
       .rotate()
-      .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
+      .resize({
+        width: 1280,
+        height: 1280,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
       .jpeg({ quality: 80 })
       .toBuffer();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    if (isHeicBuffer(buf) || isHeicDecodeError(msg)) {
+    if (isHeicDecodeError(msg) || msg === HEIC_UPLOAD_ERROR) {
       throw new Error(HEIC_UPLOAD_ERROR);
     }
     throw new Error(

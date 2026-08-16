@@ -32,8 +32,9 @@ export function normalizePhone(raw: string): string {
     .trim();
 }
 
+/** Broad accept — empty MIME from iOS is fine; exotic types go to convert. */
 export const ID_IMAGE_ACCEPT =
-  "image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.heic,.heif,image/*";
+  "image/*,.heic,.heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.bmp,.gif,.avif";
 
 export const HEIC_CONVERT_ERROR =
   "Couldn't read this iPhone photo — try exporting as JPEG from Photos, or set Camera → Formats → Most Compatible, then re-upload.";
@@ -83,22 +84,27 @@ function isAlreadyWebFriendly(file: File): boolean {
   );
 }
 
-/** iOS often leaves type empty — give Safari a HEIC MIME so native decode can run. */
-function withHeicMime(file: File, heic: boolean): File {
-  if (!heic) return file;
-  const type = (file.type || "").toLowerCase();
-  if (type === "image/heic" || type === "image/heif") return file;
+function baseName(file: File): string {
+  return file.name.replace(/\.[^.]+$/, "") || "id-photo";
+}
+
+/** Copy bytes into a fresh File with a decode-friendly MIME (iOS often leaves type empty). */
+async function reblobAsHeic(file: File): Promise<File> {
+  const bytes = await file.arrayBuffer();
   const name = file.name.toLowerCase().match(/\.(heic|heif)$/)
     ? file.name
-    : `${file.name.replace(/\.[^.]+$/, "") || "id-photo"}.heic`;
-  return new File([file], name, { type: "image/heic" });
+    : `${baseName(file)}.heic`;
+  return new File([bytes], name, {
+    type: "image/heic",
+    lastModified: file.lastModified,
+  });
 }
 
 async function canvasToJpegFile(
   source: CanvasImageSource,
   width: number,
   height: number,
-  baseName: string,
+  nameBase: string,
 ): Promise<File> {
   const canvas = document.createElement("canvas");
   const max = 2000;
@@ -108,19 +114,51 @@ async function canvasToJpegFile(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error(HEIC_CONVERT_ERROR);
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob | null>((resolve) =>
+
+  let blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/jpeg", 0.88),
   );
+
+  // Older WebKit sometimes returns null from toBlob — fall back to data URL.
+  if (!blob || blob.size < 32) {
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      const res = await fetch(dataUrl);
+      blob = await res.blob();
+    } catch {
+      blob = null;
+    }
+  }
+
   if (!blob || blob.size < 32) throw new Error(HEIC_CONVERT_ERROR);
-  return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+  return new File([blob], `${nameBase}.jpg`, { type: "image/jpeg" });
 }
 
 async function decodeWithCreateImageBitmap(file: File): Promise<File | null> {
   try {
-    const bitmap = await createImageBitmap(file);
+    const attempts: Promise<ImageBitmap>[] = [
+      createImageBitmap(file),
+      createImageBitmap(file, {
+        imageOrientation: "from-image",
+      } as ImageBitmapOptions),
+    ];
+    let bitmap: ImageBitmap | null = null;
+    for (const attempt of attempts) {
+      try {
+        bitmap = await attempt;
+        break;
+      } catch {
+        /* try next */
+      }
+    }
+    if (!bitmap) return null;
     try {
-      const base = file.name.replace(/\.[^.]+$/, "") || "id-photo";
-      return await canvasToJpegFile(bitmap, bitmap.width, bitmap.height, base);
+      return await canvasToJpegFile(
+        bitmap,
+        bitmap.width,
+        bitmap.height,
+        baseName(file),
+      );
     } finally {
       bitmap.close();
     }
@@ -134,14 +172,26 @@ async function decodeWithHtmlImage(file: File): Promise<File | null> {
   try {
     const img = new Image();
     img.decoding = "async";
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("decode failed"));
-      img.src = url;
-    });
+    img.src = url;
+    try {
+      if (typeof img.decode === "function") {
+        await img.decode();
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("decode failed"));
+        });
+      }
+    } catch {
+      return null;
+    }
     if (!img.naturalWidth || !img.naturalHeight) return null;
-    const base = file.name.replace(/\.[^.]+$/, "") || "id-photo";
-    return await canvasToJpegFile(img, img.naturalWidth, img.naturalHeight, base);
+    return await canvasToJpegFile(
+      img,
+      img.naturalWidth,
+      img.naturalHeight,
+      baseName(file),
+    );
   } catch {
     return null;
   } finally {
@@ -149,31 +199,51 @@ async function decodeWithHtmlImage(file: File): Promise<File | null> {
   }
 }
 
-/**
- * libheif fallback for browsers without native HEIC decode.
- * May still fail on iref > 16 — callers map that to HEIC_CONVERT_ERROR.
- */
-async function decodeWithHeic2Any(file: File): Promise<File | null> {
+/** Newer libheif (via heic-to) — better iOS 18 support than heic2any. */
+async function decodeWithHeicTo(file: File): Promise<File | null> {
   try {
-    const heic2any = (await import("heic2any")).default;
-    const converted = await heic2any({
+    const { heicTo } = await import("heic-to");
+    const blob = await heicTo({
       blob: file,
-      toType: "image/jpeg",
+      type: "image/jpeg",
       quality: 0.88,
     });
-    const blob = Array.isArray(converted) ? converted[0] : converted;
     if (!(blob instanceof Blob) || blob.size < 32) return null;
-    const base = file.name.replace(/\.[^.]+$/, "") || "id-photo";
-    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+    return new File([blob], `${baseName(file)}.jpg`, { type: "image/jpeg" });
   } catch {
     return null;
   }
 }
 
 /**
- * iPhone Photos often give HEIC. Convert to JPEG in the browser before upload
- * (server sharp/libheif rejects many real iPhone HEICs). Never silently keep HEIC.
- * Order: native createImageBitmap → HTML Image → heic2any → friendly error.
+ * Server path: libheif-js with security limits disabled (handles iref > 16 + HEVC).
+ * Used when browser native decode and heic-to both fail (e.g. desktop Chrome).
+ */
+async function decodeViaServerApi(file: File): Promise<File | null> {
+  try {
+    const form = new FormData();
+    form.set("file", file, file.name || "photo.heic");
+    const res = await fetch("/api/convert-image", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob || blob.size < 32) return null;
+    const type = (blob.type || "").toLowerCase();
+    if (type && type !== "image/jpeg" && !type.includes("octet")) {
+      // Unexpected type — still try if it looks like jpeg bytes
+    }
+    return new File([blob], `${baseName(file)}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convert any picked ID photo to JPEG before upload.
+ * Order: native bitmap → HTML Image → heic-to → server libheif → friendly error.
+ * Never silently keep HEIC for storage/OCR.
  */
 export async function normalizeImageFile(file: File): Promise<File> {
   const head = await file.slice(0, 16).arrayBuffer();
@@ -183,7 +253,7 @@ export async function normalizeImageFile(file: File): Promise<File> {
     return file;
   }
 
-  const decodeFile = withHeicMime(file, heic);
+  const decodeFile = heic ? await reblobAsHeic(file) : file;
 
   const viaBitmap = await decodeWithCreateImageBitmap(decodeFile);
   if (viaBitmap) return viaBitmap;
@@ -192,15 +262,22 @@ export async function normalizeImageFile(file: File): Promise<File> {
   if (viaImg) return viaImg;
 
   if (heic) {
-    const viaHeic2Any = await decodeWithHeic2Any(decodeFile);
-    if (viaHeic2Any) return viaHeic2Any;
+    const viaHeicTo = await decodeWithHeicTo(decodeFile);
+    if (viaHeicTo) return viaHeicTo;
+
+    const viaServer = await decodeViaServerApi(decodeFile);
+    if (viaServer) return viaServer;
+
     throw new Error(HEIC_CONVERT_ERROR);
   }
+
+  // Non-HEIC exotic type — try server normalize, else keep original if tiny decode failed
+  const viaServer = await decodeViaServerApi(file);
+  if (viaServer) return viaServer;
 
   if (!isAlreadyWebFriendly(file)) {
     throw new Error(HEIC_CONVERT_ERROR);
   }
 
-  // Large JPEG/PNG that failed re-encode — still upload original.
   return file;
 }
