@@ -777,6 +777,42 @@ export function StudentForm({
         </p>
       )}
 
+      {(submitting || verifying || converting) && !error && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+          role="presentation"
+          aria-busy="true"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="form-loading-title"
+            aria-live="polite"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+          >
+            <h2
+              id="form-loading-title"
+              className="text-lg font-bold text-[var(--navy)]"
+            >
+              {converting
+                ? "Preparing photos…"
+                : verifying
+                  ? "Verifying ID…"
+                  : "Saving…"}
+            </h2>
+            <p className="mt-3 text-sm text-[var(--mint-text)]">
+              Please wait — this can take a moment. Don&apos;t close the page.
+            </p>
+            <div
+              className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--sky)]"
+              aria-hidden
+            >
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-[var(--navy)]" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div
           className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-4 sm:items-center"
