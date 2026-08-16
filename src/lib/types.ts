@@ -6,6 +6,8 @@ export type IdVerificationStatus =
   | "mismatch_dismissed"
   | "failed";
 
+export type ParticipationStatus = "registered" | "approved" | "rejected";
+
 export type FieldMismatch = {
   field: string;
   formValue: string;
@@ -50,6 +52,11 @@ export type Student = {
   id_extracted: ExtractedIdData | null;
   id_mismatches: FieldMismatch[] | null;
   id_verified_at: string | null;
+  participation_status: ParticipationStatus;
+  access_token: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  custom_answers: Record<string, string | boolean>;
   created_at: string;
   updated_at: string;
 };

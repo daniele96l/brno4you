@@ -30,14 +30,15 @@ export default async function ApplyToProjectPage({ params }: Props) {
             Student application
           </h1>
           <p className="mt-3 max-w-xl text-[var(--mint-text)]">
-            Fill in your details exactly as on your ID or passport. We will check
-            them against your uploaded document.
+            Fill in your registration details. After the organisers approve you,
+            you will upload your ID and sign the project documents.
           </p>
         </div>
         <StudentForm
           projectId={project.id}
           projectTitle={project.name}
           projectType={project.type}
+          formConfig={project.form_config}
         />
       </div>
     </div>

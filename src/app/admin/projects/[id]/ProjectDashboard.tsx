@@ -14,6 +14,7 @@ import {
   requiredStudentTemplateIds,
   signableStudentTemplateIds,
 } from "@/lib/project-packs";
+import { RegistrationFormBuilder } from "@/components/RegistrationFormBuilder";
 
 type TemplateItem = {
   id: string;
@@ -21,7 +22,7 @@ type TemplateItem = {
   scope: "student" | "general";
 };
 
-type Tab = "participants" | "partners" | "documents" | "settings";
+type Tab = "registration" | "participants" | "partners" | "documents" | "settings";
 
 type Props = {
   project: MobilityProject;
@@ -40,7 +41,7 @@ export function ProjectDashboard({
   templates,
   documents: initialDocs,
   allProjects,
-  initialTab = "participants",
+  initialTab = "registration",
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -97,6 +98,46 @@ export function ProjectDashboard({
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function setParticipation(
+    student: Student,
+    participation_status: "approved" | "rejected",
+  ) {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    const res = await fetch(`/api/students/${student.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ participation_status }),
+    });
+    const json = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setError(
+        explainApiError(json.error, `Could not ${participation_status} participant`),
+      );
+      return;
+    }
+    if (json.student) {
+      setStudents((prev) =>
+        prev.map((s) => (s.id === student.id ? json.student : s)),
+      );
+    }
+    if (participation_status === "approved") {
+      if (json.emailSent === false && json.error) {
+        setMessage(
+          `Approved ${student.first_name}, but email failed: ${json.error}`,
+        );
+      } else {
+        setMessage(
+          `Approved ${student.first_name} — email sent with access link.`,
+        );
+      }
+    } else {
+      setMessage(`${student.first_name} marked as not approved.`);
+    }
   }
 
   async function toggleTravel(student: Student) {
@@ -184,6 +225,7 @@ export function ProjectDashboard({
   }
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "registration", label: "Registration form" },
     { id: "participants", label: "Participants" },
     { id: "partners", label: "Partners" },
     { id: "documents", label: "Documents" },
@@ -232,23 +274,32 @@ export function ProjectDashboard({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm text-emerald-800">{message}</p>}
+
+      {tab === "registration" && (
+        <RegistrationFormBuilder
+          project={project}
+          onSaved={(p) => setProject(p)}
+        />
+      )}
 
       {tab === "participants" && (
         <div className="panel overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-[var(--line)] text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Signed</th>
-                <th className="px-4 py-3 font-medium">Travel declaration</th>
-                <th className="px-4 py-3 font-medium">Move to</th>
+                <th className="px-4 py-3 font-medium">Travel</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {students.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-[var(--muted)]">
+                  <td colSpan={6} className="px-4 py-8 text-[var(--muted)]">
                     No participants yet. Share the invite link.
                   </td>
                 </tr>
@@ -276,11 +327,24 @@ export function ProjectDashboard({
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          s.participation_status === "approved"
+                            ? "bg-emerald-100 text-emerald-900"
+                            : s.participation_status === "rejected"
+                              ? "bg-red-100 text-red-900"
+                              : "bg-amber-100 text-amber-900"
+                        }`}
+                      >
+                        {s.participation_status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
                           s.id_verification_status === "matched"
                             ? "bg-emerald-100 text-emerald-900"
                             : s.id_verification_status === "mismatch_dismissed"
                               ? "bg-orange-100 text-orange-900"
-                              : "bg-amber-100 text-amber-900"
+                              : "bg-slate-100 text-slate-800"
                         }`}
                       >
                         {s.id_verification_status}
@@ -296,11 +360,6 @@ export function ProjectDashboard({
                       >
                         {c.signed}/{c.total} signed
                       </span>
-                      {c.generated > c.signed && (
-                        <div className="text-xs text-amber-800">
-                          {c.generated - c.signed} not signed
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -315,18 +374,28 @@ export function ProjectDashboard({
                       </button>
                     </td>
                     <td className="px-4 py-3">
-                      <select
-                        className="input max-w-[200px]"
-                        value={s.project_id}
-                        disabled={loading}
-                        onChange={(e) => reassign(s, e.target.value)}
-                      >
-                        {allProjects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex flex-wrap gap-2">
+                        {s.participation_status !== "approved" && (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={loading}
+                            onClick={() => setParticipation(s, "approved")}
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {s.participation_status !== "rejected" && (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={loading}
+                            onClick={() => setParticipation(s, "rejected")}
+                          >
+                            Reject
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

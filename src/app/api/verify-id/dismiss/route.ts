@@ -23,10 +23,12 @@ export async function POST(req: Request) {
   student.updated_at = new Date().toISOString();
   await saveStudent(student);
 
-  try {
-    await ensureStudentDocuments(student);
-  } catch {
-    // Non-fatal
+  if (student.participation_status === "approved") {
+    try {
+      await ensureStudentDocuments(student);
+    } catch {
+      // Non-fatal
+    }
   }
 
   const refreshed = await getStudent(body.studentId);

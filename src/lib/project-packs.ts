@@ -1,4 +1,6 @@
 import type { Student } from "./types";
+import type { ProjectFormConfig } from "./form-config";
+import { DEFAULT_FORM_CONFIG, normalizeFormConfig } from "./form-config";
 
 export type ProjectType = "training_course" | "youth_exchange";
 
@@ -16,9 +18,13 @@ export type MobilityProject = {
   coordinator_name: string;
   coordinator_email: string;
   coordinator_phone: string;
+  form_config: ProjectFormConfig;
   created_at: string;
   updated_at: string;
 };
+
+export { DEFAULT_FORM_CONFIG, normalizeFormConfig };
+export type { ProjectFormConfig };
 
 export function projectTypeLabel(type: ProjectType) {
   return type === "youth_exchange" ? "Youth Exchange" : "Training Course";

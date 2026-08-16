@@ -47,6 +47,14 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
     .filter(Boolean)
     .join(" ");
 
+  const customRows = Object.entries(student.custom_answers || {}).map(
+    ([k, v]) =>
+      [k, typeof v === "boolean" ? (v ? "Yes" : "No") : String(v)] as [
+        string,
+        string,
+      ],
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <div>
@@ -60,7 +68,8 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
           {name}
         </h1>
         <p className="text-sm text-[var(--mint-text)]">
-          Verification: {student.id_verification_status}
+          Participation: {student.participation_status} · Verification:{" "}
+          {student.id_verification_status}
           {project
             ? ` · ${projectTypeLabel(project.type)} · travel declaration: ${
                 student.needs_travel_declaration ? "yes" : "no"
@@ -83,6 +92,7 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
                 `${student.document_type} · ${student.document_country}`,
               ],
               ["Document number", student.document_number],
+              ...customRows,
             ]}
           />
         </div>

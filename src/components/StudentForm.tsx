@@ -25,6 +25,8 @@ import {
 import type { FieldMismatch, Student } from "@/lib/types";
 import { ParticipantDocuments } from "@/components/ParticipantDocuments";
 import { DocumentsToSignPreview } from "@/components/DocumentsToSignPreview";
+import type { ProjectFormConfig } from "@/lib/form-config";
+import { DEFAULT_FORM_CONFIG, isOptionalHidden } from "@/lib/form-config";
 import type { ProjectType } from "@/lib/project-packs";
 import type { FieldPath } from "react-hook-form";
 
@@ -33,6 +35,7 @@ type Props = {
   projectId?: string;
   projectTitle?: string;
   projectType?: ProjectType;
+  formConfig?: ProjectFormConfig;
 };
 
 /** Map raw/API errors — never a vague “check email/phone/uploads” blob. */
@@ -121,6 +124,7 @@ export function StudentForm({
   projectId,
   projectTitle,
   projectType = "youth_exchange",
+  formConfig = DEFAULT_FORM_CONFIG,
 }: Props) {
   const router = useRouter();
   const [frontFile, setFrontFile] = useState<File | null>(null);
@@ -133,12 +137,23 @@ export function StudentForm({
   const [error, setError] = useState<string | null>(null);
   const [errorFocusId, setErrorFocusId] = useState<string | null>(null);
   const [student, setStudent] = useState<Student | null>(initial ?? null);
+  const [customAnswers, setCustomAnswers] = useState<
+    Record<string, string | boolean>
+  >(initial?.custom_answers || {});
   const [mismatches, setMismatches] = useState<FieldMismatch[] | null>(
     initial?.id_mismatches ?? null,
   );
   const [matchOk, setMatchOk] = useState(
     initial?.id_verification_status === "matched",
   );
+
+  const needsIdPhase = student?.participation_status === "approved";
+  const isPendingApproval = student?.participation_status === "registered";
+  const isRejected = student?.participation_status === "rejected";
+  const hideSecond = isOptionalHidden(formConfig, "second_name");
+  const hideSecondSur = isOptionalHidden(formConfig, "second_surname");
+  const hidePhone = isOptionalHidden(formConfig, "phone");
+  const hideCountry = isOptionalHidden(formConfig, "document_country");
 
   const frontPreview = useObjectUrl(frontFile);
   const backPreview = useObjectUrl(backFile);
@@ -459,7 +474,8 @@ export function StudentForm({
       }
     }
 
-    const needsFront = !student?.id_front_path && !frontFile;
+    const needsFront =
+      needsIdPhase && !student?.id_front_path && !frontFile;
     if (needsFront) {
       mistakes.push({
         field: "id_front",
@@ -468,6 +484,7 @@ export function StudentForm({
       });
     }
     const needsBack =
+      needsIdPhase &&
       (values.document_type === "id_card" ||
         getValues("document_type") === "id_card") &&
       !student?.id_back_path &&
@@ -590,11 +607,19 @@ export function StudentForm({
       form.set(
         "data",
         JSON.stringify(
-          student ? payload : { ...payload, project_id: projectId },
+          student
+            ? payload
+            : {
+                ...payload,
+                project_id: projectId,
+                custom_answers: customAnswers,
+              },
         ),
       );
-      if (uploadFront) form.set("id_front", uploadFront);
-      if (uploadBack) form.set("id_back", uploadBack);
+      if (needsIdPhase) {
+        if (uploadFront) form.set("id_front", uploadFront);
+        if (uploadBack) form.set("id_back", uploadBack);
+      }
 
       const url = student ? `/api/students/${student.id}` : "/api/students";
       const method = student ? "PUT" : "POST";
@@ -665,10 +690,10 @@ export function StudentForm({
         return;
       }
 
-      // Keep this instance mounted through verify — navigating first aborted
-      // verify and looked like a silent scroll / needed a second click.
       setStudent(json.student);
-      await verify(json.student.id, true);
+      if (json.student.participation_status === "approved" && needsIdPhase) {
+        await verify(json.student.id, true);
+      }
       if (!student) {
         router.replace(`/apply/student/${json.student.id}`);
       }
@@ -754,9 +779,10 @@ export function StudentForm({
   }
 
   const verified =
-    matchOk ||
-    student?.id_verification_status === "matched" ||
-    student?.id_verification_status === "mismatch_dismissed";
+    needsIdPhase &&
+    (matchOk ||
+      student?.id_verification_status === "matched" ||
+      student?.id_verification_status === "mismatch_dismissed");
 
   const frontSrc =
     frontPreview ||
@@ -775,6 +801,36 @@ export function StudentForm({
         <p className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-3 text-sm text-[var(--navy)]">
           Applying for <strong>{projectTitle}</strong>
         </p>
+      )}
+
+      {isPendingApproval && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+          <p className="font-bold text-[var(--navy)]">Application received</p>
+          <p className="mt-1">
+            Waiting for organiser approval. You will get an email with a link
+            when you can upload your ID and sign documents.
+          </p>
+        </div>
+      )}
+
+      {isRejected && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-950">
+          <p className="font-bold">Application not approved</p>
+          <p className="mt-1">
+            This application was not selected for this project. Contact the
+            organisers if you have questions.
+          </p>
+        </div>
+      )}
+
+      {needsIdPhase && !verified && (
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4 text-sm text-[var(--navy)]">
+          <p className="font-bold">You are approved</p>
+          <p className="mt-1 text-[var(--mint-text)]">
+            Upload clear photos of your ID / passport so we can verify your
+            details, then sign the project documents.
+          </p>
+        </div>
       )}
 
       {(submitting || verifying || converting) && !error && (
@@ -920,27 +976,35 @@ export function StudentForm({
             </Field>
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register("has_second_name")} />
-            I have a second / middle name
-          </label>
-          {hasSecondName && (
-            <Field label="Second name" error={errors.second_name?.message}>
-              <input className="input" {...register("second_name")} />
-            </Field>
+          {!hideSecond && (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("has_second_name")} />
+                I have a second / middle name
+              </label>
+              {hasSecondName && (
+                <Field label="Second name" error={errors.second_name?.message}>
+                  <input className="input" {...register("second_name")} />
+                </Field>
+              )}
+            </>
           )}
 
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register("has_second_surname")} />
-            I have a second surname
-          </label>
-          {hasSecondSurname && (
-            <Field
-              label="Second surname"
-              error={errors.second_surname?.message}
-            >
-              <input className="input" {...register("second_surname")} />
-            </Field>
+          {!hideSecondSur && (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register("has_second_surname")} />
+                I have a second surname
+              </label>
+              {hasSecondSurname && (
+                <Field
+                  label="Second surname"
+                  error={errors.second_surname?.message}
+                >
+                  <input className="input" {...register("second_surname")} />
+                </Field>
+              )}
+            </>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1042,16 +1106,88 @@ export function StudentForm({
                 {...register("email")}
               />
             </Field>
-            <Field label="Phone" error={errors.phone?.message}>
-              <input
-                type="text"
-                inputMode="tel"
-                autoComplete="tel"
-                className="input"
-                {...register("phone")}
-              />
-            </Field>
+            {!hidePhone && (
+              <Field label="Phone" error={errors.phone?.message}>
+                <input
+                  type="text"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  className="input"
+                  {...register("phone")}
+                />
+              </Field>
+            )}
           </div>
+
+          {formConfig.extraFields.length > 0 && (
+            <div className="space-y-4 border-t border-[var(--line)] pt-4">
+              <h3 className="text-sm font-bold text-[var(--navy)]">
+                Extra questions
+              </h3>
+              {formConfig.extraFields.map((field) => (
+                <Field key={field.id} label={field.label}>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      className="input min-h-[88px]"
+                      value={String(customAnswers[field.id] ?? "")}
+                      onChange={(e) =>
+                        setCustomAnswers((prev) => ({
+                          ...prev,
+                          [field.id]: e.target.value,
+                        }))
+                      }
+                      required={field.required}
+                    />
+                  ) : field.type === "select" ? (
+                    <select
+                      className="input"
+                      value={String(customAnswers[field.id] ?? "")}
+                      onChange={(e) =>
+                        setCustomAnswers((prev) => ({
+                          ...prev,
+                          [field.id]: e.target.value,
+                        }))
+                      }
+                      required={field.required}
+                    >
+                      <option value="">Select…</option>
+                      {(field.options || []).map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === "checkbox" ? (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={customAnswers[field.id] === true}
+                        onChange={(e) =>
+                          setCustomAnswers((prev) => ({
+                            ...prev,
+                            [field.id]: e.target.checked,
+                          }))
+                        }
+                      />
+                      Yes
+                    </label>
+                  ) : (
+                    <input
+                      className="input"
+                      value={String(customAnswers[field.id] ?? "")}
+                      onChange={(e) =>
+                        setCustomAnswers((prev) => ({
+                          ...prev,
+                          [field.id]: e.target.value,
+                        }))
+                      }
+                      required={field.required}
+                    />
+                  )}
+                </Field>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -1071,143 +1207,149 @@ export function StudentForm({
             >
               <input className="input" {...register("document_number")} />
             </Field>
-            <Field
-              label="Issuing country"
-              error={errors.document_country?.message}
-            >
-              <input className="input" {...register("document_country")} />
-            </Field>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label={
-                student?.id_front_path
-                  ? "ID front (upload to replace)"
-                  : "ID front photo"
-              }
-              error={frontError || undefined}
-            >
-              <input
-                id="id-front-input"
-                type="file"
-                accept={ID_IMAGE_ACCEPT}
-                className="input"
-                onChange={async (e) => {
-                  const input = e.target;
-                  const f = input.files?.[0] ?? null;
-                  setFrontError(null);
-                  if (!f) {
-                    setFrontFile(null);
-                    return;
-                  }
-                  // Keep raw file immediately so submit isn't a silent “no photo”
-                  // while HEIC conversion is still running.
-                  setFrontFile(f);
-                  setConverting(true);
-                  try {
-                    const jpeg = await normalizeImageFile(f);
-                    setFrontFile(jpeg);
-                    setFrontError(null);
-                  } catch (err) {
-                    // Keep raw file — submit retries convert (incl. server path)
-                    setFrontError(
-                      err instanceof Error && err.message.trim()
-                        ? err.message
-                        : HEIC_CONVERT_ERROR,
-                    );
-                  } finally {
-                    setConverting(false);
-                  }
-                }}
-              />
-            </Field>
-            {(documentType === "id_card" || student?.id_back_path) && (
+            {!hideCountry && (
               <Field
-                label={
-                  student?.id_back_path
-                    ? "ID back (upload to replace)"
-                    : "ID back photo"
-                }
-                error={backError || undefined}
+                label="Issuing country"
+                error={errors.document_country?.message}
               >
-                <input
-                  id="id-back-input"
-                  type="file"
-                  accept={ID_IMAGE_ACCEPT}
-                  className="input"
-                  onChange={async (e) => {
-                    const input = e.target;
-                    const f = input.files?.[0] ?? null;
-                    setBackError(null);
-                    if (!f) {
-                      setBackFile(null);
-                      return;
-                    }
-                    setBackFile(f);
-                    setConverting(true);
-                    try {
-                      const jpeg = await normalizeImageFile(f);
-                      setBackFile(jpeg);
-                      setBackError(null);
-                    } catch (err) {
-                      setBackError(
-                        err instanceof Error && err.message.trim()
-                          ? err.message
-                          : HEIC_CONVERT_ERROR,
-                      );
-                    } finally {
-                      setConverting(false);
-                    }
-                  }}
-                />
+                <input className="input" {...register("document_country")} />
               </Field>
             )}
           </div>
 
-          {(frontSrc || backSrc) && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-[var(--navy)]">
-                Check your upload — make sure the photo is clear and readable
-              </p>
-              <div className="grid gap-4">
-                {frontSrc && (
-                  <figure className="space-y-2">
-                    <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
-                      Front
-                    </figcaption>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={frontSrc}
-                      alt="ID front preview"
-                      className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+          {needsIdPhase && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label={
+                    student?.id_front_path
+                      ? "ID front (upload to replace)"
+                      : "ID front photo"
+                  }
+                  error={frontError || undefined}
+                >
+                  <input
+                    id="id-front-input"
+                    type="file"
+                    accept={ID_IMAGE_ACCEPT}
+                    className="input"
+                    onChange={async (e) => {
+                      const input = e.target;
+                      const f = input.files?.[0] ?? null;
+                      setFrontError(null);
+                      if (!f) {
+                        setFrontFile(null);
+                        return;
+                      }
+                      setFrontFile(f);
+                      setConverting(true);
+                      try {
+                        const jpeg = await normalizeImageFile(f);
+                        setFrontFile(jpeg);
+                        setFrontError(null);
+                      } catch (err) {
+                        setFrontError(
+                          err instanceof Error && err.message.trim()
+                            ? err.message
+                            : HEIC_CONVERT_ERROR,
+                        );
+                      } finally {
+                        setConverting(false);
+                      }
+                    }}
+                  />
+                </Field>
+                {(documentType === "id_card" || student?.id_back_path) && (
+                  <Field
+                    label={
+                      student?.id_back_path
+                        ? "ID back (upload to replace)"
+                        : "ID back photo"
+                    }
+                    error={backError || undefined}
+                  >
+                    <input
+                      id="id-back-input"
+                      type="file"
+                      accept={ID_IMAGE_ACCEPT}
+                      className="input"
+                      onChange={async (e) => {
+                        const input = e.target;
+                        const f = input.files?.[0] ?? null;
+                        setBackError(null);
+                        if (!f) {
+                          setBackFile(null);
+                          return;
+                        }
+                        setBackFile(f);
+                        setConverting(true);
+                        try {
+                          const jpeg = await normalizeImageFile(f);
+                          setBackFile(jpeg);
+                          setBackError(null);
+                        } catch (err) {
+                          setBackError(
+                            err instanceof Error && err.message.trim()
+                              ? err.message
+                              : HEIC_CONVERT_ERROR,
+                          );
+                        } finally {
+                          setConverting(false);
+                        }
+                      }}
                     />
-                  </figure>
-                )}
-                {backSrc && (
-                  <figure className="space-y-2">
-                    <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
-                      Back
-                    </figcaption>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={backSrc}
-                      alt="ID back preview"
-                      className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
-                    />
-                  </figure>
+                  </Field>
                 )}
               </div>
-            </div>
+
+              {(frontSrc || backSrc) && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-[var(--navy)]">
+                    Check your upload — make sure the photo is clear and readable
+                  </p>
+                  <div className="grid gap-4">
+                    {frontSrc && (
+                      <figure className="space-y-2">
+                        <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                          Front
+                        </figcaption>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={frontSrc}
+                          alt="ID front preview"
+                          className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                        />
+                      </figure>
+                    )}
+                    {backSrc && (
+                      <figure className="space-y-2">
+                        <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                          Back
+                        </figcaption>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={backSrc}
+                          alt="ID back preview"
+                          className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                        />
+                      </figure>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </section>
 
-        <DocumentsToSignPreview
-          projectType={projectType}
-          birthDate={birthDate}
-          needsTravelDeclaration={student?.needs_travel_declaration ?? false}
-        />
+        {needsIdPhase && (
+          <DocumentsToSignPreview
+            projectType={projectType}
+            birthDate={birthDate}
+            needsTravelDeclaration={student?.needs_travel_declaration ?? false}
+          />
+        )}
 
+        {!isRejected && (
         <button
           type="submit"
           disabled={submitting || verifying || converting}
@@ -1216,11 +1358,18 @@ export function StudentForm({
           {converting
             ? "Preparing photos…"
             : submitting || verifying
-              ? "Saving & verifying…"
-              : student
-                ? "Update & re-verify ID"
-                : "Submit & verify ID"}
+              ? needsIdPhase
+                ? "Saving & verifying…"
+                : "Submitting…"
+              : needsIdPhase
+                ? student
+                  ? "Update & verify ID"
+                  : "Save & verify ID"
+                : student
+                  ? "Update application"
+                  : "Submit application"}
         </button>
+        )}
       </form>
 
       {matchOk && (
@@ -1309,7 +1458,7 @@ export function StudentForm({
         </p>
       )}
 
-      {student && (
+      {student && needsIdPhase && (
         <ParticipantDocuments
           key={`${student.id}-${student.id_verification_status}-${matchOk}`}
           student={student}

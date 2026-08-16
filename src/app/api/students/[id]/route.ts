@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { studentFormSchema } from "@/lib/student-schema";
-import { applyFormToStudent, getStudent, saveStudent } from "@/lib/students";
-import { canAccessStudent, isAdminAuthenticated } from "@/lib/auth";
-import { fileHash, saveUpload } from "@/lib/storage";
-import { normalizeIdImageBuffer } from "@/lib/normalize-id-image";
+import { nanoid } from "nanoid";
+import { isAdminAuthenticated } from "@/lib/auth";
+import { sendApprovalEmail } from "@/lib/email";
+import { getProject } from "@/lib/projects";
+import { getStudent, saveStudent } from "@/lib/students";
 
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
+  const { canAccessStudent } = await import("@/lib/auth");
   const { id } = await ctx.params;
   if (!(await canAccessStudent(id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,19 +34,82 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const body = (await req.json()) as {
     needs_travel_declaration?: boolean;
     project_id?: string;
+    participation_status?: "registered" | "approved" | "rejected";
   };
-  const student = {
+
+  let student = {
     ...existing,
     needs_travel_declaration:
       body.needs_travel_declaration ?? existing.needs_travel_declaration,
     project_id: body.project_id ?? existing.project_id,
     updated_at: new Date().toISOString(),
   };
+
+  if (
+    body.participation_status &&
+    body.participation_status !== existing.participation_status
+  ) {
+    const now = new Date().toISOString();
+    if (body.participation_status === "approved") {
+      const token = existing.access_token || nanoid(32);
+      student = {
+        ...student,
+        participation_status: "approved",
+        access_token: token,
+        approved_at: now,
+        rejected_at: null,
+      };
+      await saveStudent(student);
+      const project = student.project_id
+        ? await getProject(student.project_id)
+        : null;
+      try {
+        await sendApprovalEmail({
+          to: student.email,
+          firstName: student.first_name,
+          projectName: project?.name || "the project",
+          accessToken: token,
+        });
+      } catch (e) {
+        return NextResponse.json(
+          {
+            student,
+            error:
+              e instanceof Error
+                ? e.message
+                : "Approved, but the email could not be sent",
+            emailSent: false,
+          },
+          { status: 200 },
+        );
+      }
+      return NextResponse.json({ student, emailSent: true });
+    }
+    if (body.participation_status === "rejected") {
+      student = {
+        ...student,
+        participation_status: "rejected",
+        rejected_at: now,
+      };
+    } else {
+      student = {
+        ...student,
+        participation_status: body.participation_status,
+      };
+    }
+  }
+
   await saveStudent(student);
   return NextResponse.json({ student });
 }
 
 export async function PUT(req: Request, ctx: Ctx) {
+  const { canAccessStudent } = await import("@/lib/auth");
+  const { studentFormSchema } = await import("@/lib/student-schema");
+  const { applyFormToStudent } = await import("@/lib/students");
+  const { fileHash, saveUpload } = await import("@/lib/storage");
+  const { normalizeIdImageBuffer } = await import("@/lib/normalize-id-image");
+
   const { id } = await ctx.params;
   if (!(await canAccessStudent(id))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -100,11 +164,20 @@ export async function PUT(req: Request, ctx: Ctx) {
       imagesChanged = true;
     }
 
-    if (student.document_type === "id_card" && !student.id_back_path) {
-      return NextResponse.json(
-        { error: "ID card back image is required" },
-        { status: 400 },
-      );
+    // ID photos only required when approved (post-approval phase)
+    if (existing.participation_status === "approved") {
+      if (!student.id_front_path) {
+        return NextResponse.json(
+          { error: "ID front image is required" },
+          { status: 400 },
+        );
+      }
+      if (student.document_type === "id_card" && !student.id_back_path) {
+        return NextResponse.json(
+          { error: "ID card back image is required" },
+          { status: 400 },
+        );
+      }
     }
 
     if (imagesChanged) {

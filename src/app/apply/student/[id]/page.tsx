@@ -46,6 +46,7 @@ export default async function EditApplyPage({ params }: Props) {
           projectId={student.project_id}
           projectTitle={project?.name}
           projectType={project?.type}
+          formConfig={project?.form_config}
         />
       </div>
     </div>

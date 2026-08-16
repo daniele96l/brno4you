@@ -33,7 +33,7 @@ export function CreateProjectForm() {
         );
         return;
       }
-      router.push(`/admin/projects/${json.project.id}`);
+      router.push(`/admin/projects/${json.project.id}?tab=registration`);
       router.refresh();
     } catch (err) {
       setError(

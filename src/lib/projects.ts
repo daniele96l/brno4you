@@ -5,6 +5,7 @@ import {
   type ProjectType,
   availableStudentTemplateIds,
   isMinor,
+  normalizeFormConfig,
   partnershipTemplateId,
   projectTypeLabel,
   projectTypeShort,
@@ -48,29 +49,47 @@ function slugify(input: string) {
     .slice(0, 60);
 }
 
+function mapProject(raw: MobilityProject | null): MobilityProject | null {
+  if (!raw) return null;
+  return {
+    ...raw,
+    form_config: normalizeFormConfig(
+      (raw as MobilityProject & { form_config?: unknown }).form_config,
+    ),
+  };
+}
+
 export async function listProjects(): Promise<MobilityProject[]> {
   const data = await rpc<MobilityProject[]>("brno4you_list_projects", {});
-  return data || [];
+  return (data || []).map((p) => mapProject(p)!).filter(Boolean);
 }
 
 export async function getProject(id: string): Promise<MobilityProject | null> {
-  return rpc<MobilityProject | null>("brno4you_get_project", { p_id: id });
+  return mapProject(
+    await rpc<MobilityProject | null>("brno4you_get_project", { p_id: id }),
+  );
 }
 
 export async function getProjectBySlug(
   slug: string,
 ): Promise<MobilityProject | null> {
-  return rpc<MobilityProject | null>("brno4you_get_project_by_slug", {
-    p_slug: slug,
-  });
+  return mapProject(
+    await rpc<MobilityProject | null>("brno4you_get_project_by_slug", {
+      p_slug: slug,
+    }),
+  );
 }
 
 export async function saveProject(
   project: MobilityProject,
 ): Promise<MobilityProject> {
-  return rpc<MobilityProject>("brno4you_upsert_project", {
-    p_project: project,
+  const data = await rpc<MobilityProject>("brno4you_upsert_project", {
+    p_project: {
+      ...project,
+      form_config: normalizeFormConfig(project.form_config),
+    },
   });
+  return mapProject(data)!;
 }
 
 export function createProject(input: ProjectInput): MobilityProject {
@@ -91,6 +110,7 @@ export function createProject(input: ProjectInput): MobilityProject {
     coordinator_name: input.coordinator_name?.trim() || "Hedvika",
     coordinator_email: input.coordinator_email?.trim() || "",
     coordinator_phone: input.coordinator_phone?.trim() || "",
+    form_config: { hiddenOptional: [], extraFields: [] },
     created_at: now,
     updated_at: now,
   };

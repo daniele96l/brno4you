@@ -15,6 +15,7 @@ async function ensureDocsSafe(studentId: string) {
   try {
     const student = await getStudent(studentId);
     if (!student) return;
+    if (student.participation_status !== "approved") return;
     if (
       student.id_verification_status !== "matched" &&
       student.id_verification_status !== "mismatch_dismissed"

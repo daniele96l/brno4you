@@ -1,87 +1,28 @@
 import { NextResponse } from "next/server";
-import { studentFormSchema } from "@/lib/student-schema";
+import { getProject } from "@/lib/projects";
 import {
-  createStudentFromForm,
-  saveStudent,
-} from "@/lib/students";
-import {
-  createStudentSession,
-  isAdminAuthenticated,
-} from "@/lib/auth";
-import { fileHash, saveUpload } from "@/lib/storage";
-import { normalizeIdImageBuffer } from "@/lib/normalize-id-image";
+  buildRegistrationSchema,
+  normalizeFormConfig,
+  toStudentFormInput,
+} from "@/lib/form-config";
+import { createStudentFromForm, saveStudent } from "@/lib/students";
+import { createStudentSession, isAdminAuthenticated } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-async function parseMultipart(req: Request) {
-  const form = await req.formData();
-  const jsonRaw = form.get("data");
-  if (typeof jsonRaw !== "string") {
-    throw new Error("Missing data");
-  }
-  const parsed = studentFormSchema.safeParse(JSON.parse(jsonRaw));
-  if (!parsed.success) {
-    return { error: parsed.error.flatten(), data: null, form };
-  }
-  return { error: null, data: parsed.data, form };
-}
-
-async function handleFiles(
-  studentId: string,
-  form: FormData,
-  requireFront: boolean,
-) {
-  const front = form.get("id_front");
-  const back = form.get("id_back");
-
-  let id_front_path: string | null = null;
-  let id_back_path: string | null = null;
-  let id_front_hash: string | null = null;
-  let id_back_hash: string | null = null;
-
-  if (front instanceof File && front.size > 0) {
-    const raw = Buffer.from(await front.arrayBuffer());
-    const normalized = await normalizeIdImageBuffer(raw, front.type);
-    id_front_path = await saveUpload(
-      `ids/${studentId}/front.${normalized.ext}`,
-      normalized.buffer,
-      normalized.contentType,
-    );
-    id_front_hash = fileHash(normalized.buffer);
-  } else if (requireFront) {
-    throw new Error("ID front image is required");
-  }
-
-  if (back instanceof File && back.size > 0) {
-    const raw = Buffer.from(await back.arrayBuffer());
-    const normalized = await normalizeIdImageBuffer(raw, back.type);
-    id_back_path = await saveUpload(
-      `ids/${studentId}/back.${normalized.ext}`,
-      normalized.buffer,
-      normalized.contentType,
-    );
-    id_back_hash = fileHash(normalized.buffer);
-  }
-
-  return { id_front_path, id_back_path, id_front_hash, id_back_hash };
-}
-
 export async function POST(req: Request) {
   try {
-    const { error, data, form } = await parseMultipart(req);
-    if (error || !data) {
-      return NextResponse.json({ error }, { status: 400 });
+    const form = await req.formData();
+    const jsonRaw = form.get("data");
+    if (typeof jsonRaw !== "string") {
+      return NextResponse.json({ error: "Missing data" }, { status: 400 });
     }
-
-    const projectId =
-      typeof form.get("project_id") === "string"
+    const payload = JSON.parse(jsonRaw) as Record<string, unknown>;
+    const resolvedProjectId =
+      (typeof form.get("project_id") === "string"
         ? String(form.get("project_id"))
-        : (data as { project_id?: string }).project_id;
-    // project_id may be embedded in JSON payload
-    const payload = JSON.parse(String(form.get("data"))) as {
-      project_id?: string;
-    };
-    const resolvedProjectId = payload.project_id || projectId;
+        : null) ||
+      (typeof payload.project_id === "string" ? payload.project_id : null);
     if (!resolvedProjectId) {
       return NextResponse.json(
         { error: "project_id required — use a project invite link" },
@@ -89,17 +30,28 @@ export async function POST(req: Request) {
       );
     }
 
-    const student = createStudentFromForm(data, resolvedProjectId);
-    const files = await handleFiles(student.id, form, true);
-
-    if (data.document_type === "id_card" && !files.id_back_path) {
+    const project = await getProject(resolvedProjectId);
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+    const formConfig = normalizeFormConfig(project.form_config);
+    const parsed = buildRegistrationSchema(formConfig).safeParse(payload);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: { formErrors: ["ID card back image is required"] } },
+        { error: parsed.error.flatten() },
         { status: 400 },
       );
     }
 
-    Object.assign(student, files);
+    const studentData = toStudentFormInput(parsed.data, formConfig);
+    const customAnswers =
+      (parsed.data.custom_answers as Record<string, string | boolean>) || {};
+    const student = createStudentFromForm(
+      studentData,
+      resolvedProjectId,
+      customAnswers,
+    );
+    // Registration only — no ID photos yet
     await saveStudent(student);
     await createStudentSession(student.id);
 

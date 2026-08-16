@@ -2,6 +2,7 @@ import { rpc } from "./supabase";
 import type { GeneratedDocument, Student } from "./types";
 import type { StudentFormInput } from "./student-schema";
 import { randomId } from "./auth";
+import { normalizeFormConfig } from "./form-config";
 
 function mapStudent(raw: Record<string, unknown> | null): Student | null {
   if (!raw) return null;
@@ -31,6 +32,14 @@ function mapStudent(raw: Record<string, unknown> | null): Student | null {
     id_extracted: (raw.id_extracted as Student["id_extracted"]) ?? null,
     id_mismatches: (raw.id_mismatches as Student["id_mismatches"]) ?? null,
     id_verified_at: (raw.id_verified_at as string) ?? null,
+    participation_status:
+      (raw.participation_status as Student["participation_status"]) ||
+      "registered",
+    access_token: (raw.access_token as string) ?? null,
+    approved_at: (raw.approved_at as string) ?? null,
+    rejected_at: (raw.rejected_at as string) ?? null,
+    custom_answers:
+      (raw.custom_answers as Record<string, string | boolean>) || {},
     created_at: String(raw.created_at),
     updated_at: String(raw.updated_at),
   };
@@ -47,6 +56,16 @@ export async function getStudent(id: string): Promise<Student | null> {
   return mapStudent(data);
 }
 
+export async function getStudentByAccessToken(
+  token: string,
+): Promise<Student | null> {
+  const data = await rpc<Record<string, unknown> | null>(
+    "brno4you_get_student_by_access_token",
+    { p_token: token },
+  );
+  return mapStudent(data);
+}
+
 export async function listStudents(projectId?: string | null): Promise<Student[]> {
   const data = await rpc<Record<string, unknown>[]>("brno4you_list_students", {
     p_project_id: projectId ?? null,
@@ -57,6 +76,7 @@ export async function listStudents(projectId?: string | null): Promise<Student[]
 export function createStudentFromForm(
   data: StudentFormInput,
   projectId: string,
+  customAnswers: Record<string, string | boolean> = {},
 ): Student {
   const now = new Date().toISOString();
   return {
@@ -84,6 +104,11 @@ export function createStudentFromForm(
     id_extracted: null,
     id_mismatches: null,
     id_verified_at: null,
+    participation_status: "registered",
+    access_token: null,
+    approved_at: null,
+    rejected_at: null,
+    custom_answers: customAnswers,
     created_at: now,
     updated_at: now,
   };
@@ -92,6 +117,7 @@ export function createStudentFromForm(
 export function applyFormToStudent(
   student: Student,
   data: StudentFormInput,
+  customAnswers?: Record<string, string | boolean>,
 ): Student {
   return {
     ...student,
@@ -108,6 +134,7 @@ export function applyFormToStudent(
     document_type: data.document_type,
     document_number: data.document_number,
     document_country: data.document_country,
+    custom_answers: customAnswers ?? student.custom_answers,
     updated_at: new Date().toISOString(),
   };
 }
@@ -133,3 +160,6 @@ export async function listAllDocuments() {
   const docs = await rpc<GeneratedDocument[]>("brno4you_list_all_documents", {});
   return docs || [];
 }
+
+/** Re-export for callers that normalize project JSON. */
+export { normalizeFormConfig };

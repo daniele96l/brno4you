@@ -35,13 +35,14 @@ export default async function AdminProjectPage({ params, searchParams }: Props) 
       listProjects(),
     ]);
 
-  // Backfill PDFs for already-verified participants (no admin Generate)
+  // Backfill PDFs only for approved + verified participants
   await Promise.all(
     students
       .filter(
         (s) =>
-          s.id_verification_status === "matched" ||
-          s.id_verification_status === "mismatch_dismissed",
+          s.participation_status === "approved" &&
+          (s.id_verification_status === "matched" ||
+            s.id_verification_status === "mismatch_dismissed"),
       )
       .map((s) => ensureStudentDocuments(s).catch(() => null)),
   );
@@ -51,9 +52,10 @@ export default async function AdminProjectPage({ params, searchParams }: Props) 
     tab === "partners" ||
     tab === "documents" ||
     tab === "settings" ||
-    tab === "participants"
+    tab === "participants" ||
+    tab === "registration"
       ? tab
-      : "participants";
+      : "registration";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">

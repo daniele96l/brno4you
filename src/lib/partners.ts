@@ -113,6 +113,8 @@ async function seedStudents(
     const student = createStudentFromForm(data, projectId);
     student.id = `sample_${randomId().slice(0, 8)}`;
     student.id_verification_status = "matched";
+    student.participation_status = "approved";
+    student.approved_at = new Date().toISOString();
     await saveStudent(student);
   }
 }

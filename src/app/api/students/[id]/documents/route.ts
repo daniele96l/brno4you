@@ -46,8 +46,10 @@ export async function GET(_req: Request, ctx: Ctx) {
     })),
     project,
     verified:
-      student.id_verification_status === "matched" ||
-      student.id_verification_status === "mismatch_dismissed",
+      student.participation_status === "approved" &&
+      (student.id_verification_status === "matched" ||
+        student.id_verification_status === "mismatch_dismissed"),
+    participation_status: student.participation_status,
   });
 }
 
@@ -64,6 +66,12 @@ export async function POST(_req: Request, ctx: Ctx) {
   const verified =
     student.id_verification_status === "matched" ||
     student.id_verification_status === "mismatch_dismissed";
+  if (student.participation_status !== "approved") {
+    return NextResponse.json(
+      { error: "Documents are available after your application is approved" },
+      { status: 400 },
+    );
+  }
   if (!verified) {
     return NextResponse.json(
       { error: "Complete ID verification before generating documents" },
