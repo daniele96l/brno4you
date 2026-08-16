@@ -126,15 +126,9 @@ export function ProjectDashboard({
       );
     }
     if (participation_status === "approved") {
-      if (json.emailSent === false && json.error) {
-        setMessage(
-          `Approved ${student.first_name}, but email failed: ${json.error}`,
-        );
-      } else {
-        setMessage(
-          `Approved ${student.first_name} — email sent with access link.`,
-        );
-      }
+      setMessage(
+        `Approved ${student.first_name}. They can open /apply/portal with email + document number.`,
+      );
     } else {
       setMessage(`${student.first_name} marked as not approved.`);
     }

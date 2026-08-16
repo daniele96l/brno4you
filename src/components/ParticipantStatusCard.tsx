@@ -14,8 +14,8 @@ export function ParticipantStatusCard({
         <p className="mt-1">
           Your application
           {projectName ? ` for ${projectName}` : ""} was received. The
-          organisation has not decided yet. You will get an email when you are
-          approved.
+          organisation has not decided yet. When you are approved, open your
+          participant profile again to sign documents.
         </p>
       </div>
     );
