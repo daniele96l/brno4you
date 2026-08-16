@@ -127,6 +127,7 @@ export function StudentForm({
   const [backFile, setBackFile] = useState<File | null>(null);
   const [frontError, setFrontError] = useState<string | null>(null);
   const [backError, setBackError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -542,27 +543,36 @@ export function StudentForm({
 
       let uploadFront = frontFile;
       let uploadBack = backFile;
+      setConverting(true);
       try {
-        if (uploadFront) uploadFront = await normalizeImageFile(uploadFront);
-      } catch (e) {
-        const msg =
-          e instanceof Error && e.message.trim()
-            ? e.message
-            : HEIC_CONVERT_ERROR;
-        setFrontError(msg);
-        setBanner(msg, msg);
-        return;
-      }
-      try {
-        if (uploadBack) uploadBack = await normalizeImageFile(uploadBack);
-      } catch (e) {
-        const msg =
-          e instanceof Error && e.message.trim()
-            ? e.message
-            : HEIC_CONVERT_ERROR;
-        setBackError(msg);
-        setBanner(msg, msg);
-        return;
+        if (uploadFront) {
+          try {
+            uploadFront = await normalizeImageFile(uploadFront);
+          } catch (e) {
+            const msg =
+              e instanceof Error && e.message.trim()
+                ? e.message
+                : HEIC_CONVERT_ERROR;
+            setFrontError(msg);
+            setBanner(msg, msg);
+            return;
+          }
+        }
+        if (uploadBack) {
+          try {
+            uploadBack = await normalizeImageFile(uploadBack);
+          } catch (e) {
+            const msg =
+              e instanceof Error && e.message.trim()
+                ? e.message
+                : HEIC_CONVERT_ERROR;
+            setBackError(msg);
+            setBanner(msg, msg);
+            return;
+          }
+        }
+      } finally {
+        setConverting(false);
       }
 
       const form = new FormData();
@@ -1030,6 +1040,7 @@ export function StudentForm({
                     setFrontFile(null);
                     return;
                   }
+                  setConverting(true);
                   try {
                     setFrontFile(await normalizeImageFile(f));
                   } catch (err) {
@@ -1040,6 +1051,8 @@ export function StudentForm({
                         ? err.message
                         : HEIC_CONVERT_ERROR,
                     );
+                  } finally {
+                    setConverting(false);
                   }
                 }}
               />
@@ -1066,6 +1079,7 @@ export function StudentForm({
                       setBackFile(null);
                       return;
                     }
+                    setConverting(true);
                     try {
                       setBackFile(await normalizeImageFile(f));
                     } catch (err) {
@@ -1076,6 +1090,8 @@ export function StudentForm({
                           ? err.message
                           : HEIC_CONVERT_ERROR,
                       );
+                    } finally {
+                      setConverting(false);
                     }
                   }}
                 />
@@ -1128,14 +1144,16 @@ export function StudentForm({
 
         <button
           type="submit"
-          disabled={submitting || verifying}
+          disabled={converting || submitting || verifying}
           className="btn-primary"
         >
-          {submitting || verifying
-            ? "Saving & verifying…"
-            : student
-              ? "Update & re-verify ID"
-              : "Submit & verify ID"}
+          {converting
+            ? "Preparing photo…"
+            : submitting || verifying
+              ? "Saving & verifying…"
+              : student
+                ? "Update & re-verify ID"
+                : "Submit & verify ID"}
         </button>
       </form>
 

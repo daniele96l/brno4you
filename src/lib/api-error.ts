@@ -18,7 +18,8 @@ const MESSAGE_HINTS: Array<{ test: RegExp; text: string }> = [
     text: "We couldn’t find this project. Go back to the project list and open it again.",
   },
   {
-    test: /couldn't read this iphone photo|heic|heif/i,
+    test:
+      /couldn't read this iphone photo|security limit|iref box|corrupt header|libheif|\bheic\b|\bheif\b/i,
     text: "Couldn't read this iPhone photo — try exporting as JPEG from Photos, or set Camera → Formats → Most Compatible, then re-upload.",
   },
   {

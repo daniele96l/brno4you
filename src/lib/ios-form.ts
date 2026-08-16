@@ -74,7 +74,6 @@ function looksLikeHeicBytes(buf: ArrayBuffer): boolean {
 
 function isAlreadyWebFriendly(file: File): boolean {
   const type = (file.type || "").toLowerCase();
-  const name = file.name.toLowerCase();
   if (looksLikeHeicNameOrType(file)) return false;
   return (
     type === "image/jpeg" ||
@@ -82,6 +81,17 @@ function isAlreadyWebFriendly(file: File): boolean {
     type === "image/png" ||
     type === "image/webp"
   );
+}
+
+/** iOS often leaves type empty — give Safari a HEIC MIME so native decode can run. */
+function withHeicMime(file: File, heic: boolean): File {
+  if (!heic) return file;
+  const type = (file.type || "").toLowerCase();
+  if (type === "image/heic" || type === "image/heif") return file;
+  const name = file.name.toLowerCase().match(/\.(heic|heif)$/)
+    ? file.name
+    : `${file.name.replace(/\.[^.]+$/, "") || "id-photo"}.heic`;
+  return new File([file], name, { type: "image/heic" });
 }
 
 async function canvasToJpegFile(
@@ -140,8 +150,30 @@ async function decodeWithHtmlImage(file: File): Promise<File | null> {
 }
 
 /**
+ * libheif fallback for browsers without native HEIC decode.
+ * May still fail on iref > 16 — callers map that to HEIC_CONVERT_ERROR.
+ */
+async function decodeWithHeic2Any(file: File): Promise<File | null> {
+  try {
+    const heic2any = (await import("heic2any")).default;
+    const converted = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.88,
+    });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    if (!(blob instanceof Blob) || blob.size < 32) return null;
+    const base = file.name.replace(/\.[^.]+$/, "") || "id-photo";
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * iPhone Photos often give HEIC. Convert to JPEG in the browser before upload
- * (server sharp cannot decode HEIC/HEVC on Vercel). Never silently keep HEIC.
+ * (server sharp/libheif rejects many real iPhone HEICs). Never silently keep HEIC.
+ * Order: native createImageBitmap → HTML Image → heic2any → friendly error.
  */
 export async function normalizeImageFile(file: File): Promise<File> {
   const head = await file.slice(0, 16).arrayBuffer();
@@ -151,13 +183,21 @@ export async function normalizeImageFile(file: File): Promise<File> {
     return file;
   }
 
-  const viaBitmap = await decodeWithCreateImageBitmap(file);
+  const decodeFile = withHeicMime(file, heic);
+
+  const viaBitmap = await decodeWithCreateImageBitmap(decodeFile);
   if (viaBitmap) return viaBitmap;
 
-  const viaImg = await decodeWithHtmlImage(file);
+  const viaImg = await decodeWithHtmlImage(decodeFile);
   if (viaImg) return viaImg;
 
-  if (heic || !isAlreadyWebFriendly(file)) {
+  if (heic) {
+    const viaHeic2Any = await decodeWithHeic2Any(decodeFile);
+    if (viaHeic2Any) return viaHeic2Any;
+    throw new Error(HEIC_CONVERT_ERROR);
+  }
+
+  if (!isAlreadyWebFriendly(file)) {
     throw new Error(HEIC_CONVERT_ERROR);
   }
 

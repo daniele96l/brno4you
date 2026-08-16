@@ -2,7 +2,11 @@ import OpenAI from "openai";
 import sharp from "sharp";
 import type { ExtractedIdData, FieldMismatch, Student } from "./types";
 import { valuesMatch } from "./normalize";
-import { HEIC_UPLOAD_ERROR, isHeicBuffer } from "./normalize-id-image";
+import {
+  HEIC_UPLOAD_ERROR,
+  isHeicBuffer,
+  isHeicDecodeError,
+} from "./normalize-id-image";
 
 /** Minimum OCR fields that must be present and agree before status is matched. */
 export const MIN_ID_FIELD_AGREEMENTS = 3;
@@ -15,13 +19,16 @@ async function downscale(buf: Buffer): Promise<Buffer> {
     throw new Error(HEIC_UPLOAD_ERROR);
   }
   try {
-    return await sharp(buf)
+    return await sharp(buf, { unlimited: true, failOn: "none" })
       .rotate()
       .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer();
-  } catch {
-    if (isHeicBuffer(buf)) throw new Error(HEIC_UPLOAD_ERROR);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (isHeicBuffer(buf) || isHeicDecodeError(msg)) {
+      throw new Error(HEIC_UPLOAD_ERROR);
+    }
     throw new Error(
       "Couldn't read that ID photo for verification. Please re-upload as JPEG or PNG.",
     );
