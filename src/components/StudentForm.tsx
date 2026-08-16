@@ -401,8 +401,11 @@ export function StudentForm({
         }
       }
     }
-    const banner = scrubPatternNoise(safe.map((m) => m.message).join("\n\n"));
-    if (!banner) return;
+    const banner =
+      scrubPatternNoise(safe.map((m) => m.message).join("\n\n")) ||
+      safe[0]?.message ||
+      "Please fix the highlighted fields, then try again.";
+    // Never scroll-to-field here — that feels like a silent no-op. Popup first.
     setError(banner);
     setErrorFocusId(safe[0]?.focusId ?? null);
   }
@@ -518,8 +521,10 @@ export function StudentForm({
   }
 
   async function onSubmit(data: StudentFormInput) {
+    // Loading immediately — first click must never look like a silent no-op
     setSubmitting(true);
     setError(null);
+    setErrorFocusId(null);
     setFrontError(null);
     setBackError(null);
     setMatchOk(false);
@@ -536,43 +541,49 @@ export function StudentForm({
         setError(
           scrubPatternNoise(
             "Invite link\nYou entered: (opened without a project link)\nExpected instead: open the invite URL from the organisers",
-          ) || null,
+          ) ||
+            "Open the invite URL from the organisers, then try again.",
         );
         return;
       }
 
       let uploadFront = frontFile;
       let uploadBack = backFile;
-      setConverting(true);
+      const needsConvert = !!(uploadFront || uploadBack);
+      if (needsConvert) setConverting(true);
       try {
         if (uploadFront) {
           try {
             uploadFront = await normalizeImageFile(uploadFront);
+            setFrontFile(uploadFront);
           } catch (e) {
             const msg =
               e instanceof Error && e.message.trim()
                 ? e.message
                 : HEIC_CONVERT_ERROR;
             setFrontError(msg);
-            setBanner(msg, msg);
+            setError(msg);
+            setErrorFocusId("id-front-input");
             return;
           }
         }
         if (uploadBack) {
           try {
             uploadBack = await normalizeImageFile(uploadBack);
+            setBackFile(uploadBack);
           } catch (e) {
             const msg =
               e instanceof Error && e.message.trim()
                 ? e.message
                 : HEIC_CONVERT_ERROR;
             setBackError(msg);
-            setBanner(msg, msg);
+            setError(msg);
+            setErrorFocusId("id-back-input");
             return;
           }
         }
       } finally {
-        setConverting(false);
+        if (needsConvert) setConverting(false);
       }
 
       const form = new FormData();
@@ -602,6 +613,10 @@ export function StudentForm({
           else {
             const scanned = collectMistakes(payload);
             if (scanned.length) publishMistakes(scanned);
+            else
+              setError(
+                "Save failed — please check the highlighted fields, then try again.",
+              );
           }
           return;
         }
@@ -650,11 +665,13 @@ export function StudentForm({
         return;
       }
 
+      // Keep this instance mounted through verify — navigating first aborted
+      // verify and looked like a silent scroll / needed a second click.
       setStudent(json.student);
+      await verify(json.student.id, true);
       if (!student) {
         router.replace(`/apply/student/${json.student.id}`);
       }
-      await verify(json.student.id, true);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (isBrowserPatternNoise(msg)) {
@@ -678,6 +695,7 @@ export function StudentForm({
           : "Save failed — please check the highlighted fields",
       );
     } finally {
+      setConverting(false);
       setSubmitting(false);
     }
   }
@@ -826,6 +844,13 @@ export function StudentForm({
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (submitting || verifying) return;
+          // Avoid iOS scroll-to-focused-field when the keyboard dismisses on submit
+          try {
+            (document.activeElement as HTMLElement | null)?.blur?.();
+          } catch {
+            /* ignore */
+          }
           // Critical on iPhone: autofill is in the DOM, not always in React state
           const synced = syncAllFieldsFromDom();
           const mistakes = collectMistakes(synced);
@@ -1040,12 +1065,14 @@ export function StudentForm({
                     setFrontFile(null);
                     return;
                   }
+                  // Keep raw file immediately so submit isn't a silent “no photo”
+                  // while HEIC conversion is still running.
+                  setFrontFile(f);
                   setConverting(true);
                   try {
                     setFrontFile(await normalizeImageFile(f));
                   } catch (err) {
-                    setFrontFile(null);
-                    input.value = "";
+                    // Keep raw file — submit will retry convert with a clear error
                     setFrontError(
                       err instanceof Error && err.message.trim()
                         ? err.message
@@ -1079,12 +1106,11 @@ export function StudentForm({
                       setBackFile(null);
                       return;
                     }
+                    setBackFile(f);
                     setConverting(true);
                     try {
                       setBackFile(await normalizeImageFile(f));
                     } catch (err) {
-                      setBackFile(null);
-                      input.value = "";
                       setBackError(
                         err instanceof Error && err.message.trim()
                           ? err.message
@@ -1144,11 +1170,11 @@ export function StudentForm({
 
         <button
           type="submit"
-          disabled={converting || submitting || verifying}
+          disabled={submitting || verifying}
           className="btn-primary"
         >
           {converting
-            ? "Preparing photo…"
+            ? "Preparing photos…"
             : submitting || verifying
               ? "Saving & verifying…"
               : student
