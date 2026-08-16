@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { explainApiError } from "@/lib/api-error";
 import {
   CORE_LOCKED_FIELDS,
@@ -24,6 +24,10 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setConfig(normalizeFormConfig(project.form_config));
+  }, [project.id, project.form_config]);
+
   function toggleHidden(id: string) {
     setConfig((prev) => {
       const has = prev.hiddenOptional.includes(id);
@@ -44,12 +48,13 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
         ...prev.extraFields,
         {
           id,
-          label: "New question",
+          label: "",
           type: "text",
           required: false,
         },
       ],
     }));
+    setMessage(null);
   }
 
   function updateExtra(id: string, patch: Partial<ExtraFormField>) {
@@ -68,15 +73,43 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
     }));
   }
 
+  function moveExtra(id: string, dir: -1 | 1) {
+    setConfig((prev) => {
+      const idx = prev.extraFields.findIndex((f) => f.id === id);
+      if (idx < 0) return prev;
+      const next = idx + dir;
+      if (next < 0 || next >= prev.extraFields.length) return prev;
+      const copy = [...prev.extraFields];
+      const [item] = copy.splice(idx, 1);
+      copy.splice(next, 0, item);
+      return { ...prev, extraFields: copy };
+    });
+  }
+
   async function save() {
     setLoading(true);
     setError(null);
     setMessage(null);
+    const cleaned: ProjectFormConfig = {
+      ...config,
+      extraFields: config.extraFields
+        .map((f) => ({
+          ...f,
+          label: f.label.trim(),
+          options: f.options?.map((o) => o.trim()).filter(Boolean),
+        }))
+        .filter((f) => f.label.length > 0),
+    };
+    if (cleaned.extraFields.length !== config.extraFields.length) {
+      setError("Give every extra question a label, or delete empty ones.");
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/projects/${project.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...project, form_config: config }),
+        body: JSON.stringify({ ...project, form_config: cleaned }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -105,8 +138,8 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
             Registration form
           </h2>
           <p className="mt-1 text-sm text-[var(--mint-text)]">
-            Core identity fields stay fixed. Hide optional ones or add extra
-            questions for this project.
+            Core identity fields stay fixed. Hide optional ones or add, edit, or
+            delete extra questions for this project.
           </p>
         </div>
 
@@ -153,44 +186,94 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-[var(--navy)]">
-              Extra questions
-            </h3>
-            <button type="button" className="btn-secondary" onClick={addExtra}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--navy)]">
+                Extra questions
+              </h3>
+              <p className="text-xs text-[var(--muted)]">
+                Add a question, edit the text below, then save. Use Delete to
+                remove one.
+              </p>
+            </div>
+            <button type="button" className="btn-primary" onClick={addExtra}>
               Add question
             </button>
           </div>
           {config.extraFields.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">No extra questions yet.</p>
+            <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+              No extra questions yet. Click <strong>Add question</strong> to
+              create one you can edit or delete.
+            </p>
           )}
-          {config.extraFields.map((f) => (
+          {config.extraFields.map((f, index) => (
             <div
               key={f.id}
-              className="space-y-2 rounded-xl border border-[var(--line)] p-3"
+              className="space-y-3 rounded-xl border border-[var(--line)] bg-white p-4"
             >
-              <input
-                className="input"
-                value={f.label}
-                onChange={(e) => updateExtra(f.id, { label: e.target.value })}
-                placeholder="Question label"
-              />
-              <div className="grid gap-2 sm:grid-cols-3">
-                <select
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-[var(--mint-text)]">
+                  Question {index + 1}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={index === 0}
+                    onClick={() => moveExtra(f.id, -1)}
+                  >
+                    Move up
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={index === config.extraFields.length - 1}
+                    onClick={() => moveExtra(f.id, 1)}
+                  >
+                    Move down
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-800 hover:bg-red-100"
+                    onClick={() => removeExtra(f.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium text-[var(--navy)]">
+                  Question text
+                </span>
+                <input
                   className="input"
-                  value={f.type}
-                  onChange={(e) =>
-                    updateExtra(f.id, {
-                      type: e.target.value as ExtraFormField["type"],
-                    })
-                  }
-                >
-                  <option value="text">Short text</option>
-                  <option value="textarea">Long text</option>
-                  <option value="select">Dropdown</option>
-                  <option value="checkbox">Checkbox</option>
-                </select>
-                <label className="flex items-center gap-2 text-sm">
+                  value={f.label}
+                  onChange={(e) => updateExtra(f.id, { label: e.target.value })}
+                  placeholder="e.g. Dietary requirements"
+                  autoFocus={f.label === "" && index === config.extraFields.length - 1}
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1 text-sm">
+                  <span className="font-medium text-[var(--navy)]">
+                    Answer type
+                  </span>
+                  <select
+                    className="input"
+                    value={f.type}
+                    onChange={(e) =>
+                      updateExtra(f.id, {
+                        type: e.target.value as ExtraFormField["type"],
+                      })
+                    }
+                  >
+                    <option value="text">Short text</option>
+                    <option value="textarea">Long text</option>
+                    <option value="select">Dropdown</option>
+                    <option value="checkbox">Checkbox</option>
+                  </select>
+                </label>
+                <label className="flex items-end gap-2 pb-2 text-sm">
                   <input
                     type="checkbox"
                     checked={f.required}
@@ -198,30 +281,30 @@ export function RegistrationFormBuilder({ project, onSaved }: Props) {
                       updateExtra(f.id, { required: e.target.checked })
                     }
                   />
-                  Required
+                  <span className="font-medium text-[var(--navy)]">
+                    Required
+                  </span>
                 </label>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => removeExtra(f.id)}
-                >
-                  Remove
-                </button>
               </div>
               {f.type === "select" && (
-                <input
-                  className="input"
-                  value={(f.options || []).join(", ")}
-                  onChange={(e) =>
-                    updateExtra(f.id, {
-                      options: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="Options, comma-separated"
-                />
+                <label className="block space-y-1 text-sm">
+                  <span className="font-medium text-[var(--navy)]">
+                    Dropdown options
+                  </span>
+                  <input
+                    className="input"
+                    value={(f.options || []).join(", ")}
+                    onChange={(e) =>
+                      updateExtra(f.id, {
+                        options: e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                    placeholder="Option A, Option B, Option C"
+                  />
+                </label>
               )}
             </div>
           ))}
