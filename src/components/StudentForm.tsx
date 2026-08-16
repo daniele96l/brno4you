@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { explainApiError } from "@/lib/api-error";
 import {
+  HEIC_CONVERT_ERROR,
+  ID_IMAGE_ACCEPT,
   normalizeEmail,
   normalizeImageFile,
   normalizePhone,
@@ -542,9 +544,25 @@ export function StudentForm({
       let uploadBack = backFile;
       try {
         if (uploadFront) uploadFront = await normalizeImageFile(uploadFront);
+      } catch (e) {
+        const msg =
+          e instanceof Error && e.message.trim()
+            ? e.message
+            : HEIC_CONVERT_ERROR;
+        setFrontError(msg);
+        setBanner(msg, msg);
+        return;
+      }
+      try {
         if (uploadBack) uploadBack = await normalizeImageFile(uploadBack);
-      } catch {
-        /* keep originals */
+      } catch (e) {
+        const msg =
+          e instanceof Error && e.message.trim()
+            ? e.message
+            : HEIC_CONVERT_ERROR;
+        setBackError(msg);
+        setBanner(msg, msg);
+        return;
       }
 
       const form = new FormData();
@@ -1002,16 +1020,27 @@ export function StudentForm({
               <input
                 id="id-front-input"
                 type="file"
-                accept="image/*,.heic,.heif"
+                accept={ID_IMAGE_ACCEPT}
                 className="input"
                 onChange={async (e) => {
-                  const f = e.target.files?.[0] ?? null;
+                  const input = e.target;
+                  const f = input.files?.[0] ?? null;
                   setFrontError(null);
                   if (!f) {
                     setFrontFile(null);
                     return;
                   }
-                  setFrontFile(await normalizeImageFile(f));
+                  try {
+                    setFrontFile(await normalizeImageFile(f));
+                  } catch (err) {
+                    setFrontFile(null);
+                    input.value = "";
+                    setFrontError(
+                      err instanceof Error && err.message.trim()
+                        ? err.message
+                        : HEIC_CONVERT_ERROR,
+                    );
+                  }
                 }}
               />
             </Field>
@@ -1027,16 +1056,27 @@ export function StudentForm({
                 <input
                   id="id-back-input"
                   type="file"
-                  accept="image/*,.heic,.heif"
+                  accept={ID_IMAGE_ACCEPT}
                   className="input"
                   onChange={async (e) => {
-                    const f = e.target.files?.[0] ?? null;
+                    const input = e.target;
+                    const f = input.files?.[0] ?? null;
                     setBackError(null);
                     if (!f) {
                       setBackFile(null);
                       return;
                     }
-                    setBackFile(await normalizeImageFile(f));
+                    try {
+                      setBackFile(await normalizeImageFile(f));
+                    } catch (err) {
+                      setBackFile(null);
+                      input.value = "";
+                      setBackError(
+                        err instanceof Error && err.message.trim()
+                          ? err.message
+                          : HEIC_CONVERT_ERROR,
+                      );
+                    }
                   }}
                 />
               </Field>

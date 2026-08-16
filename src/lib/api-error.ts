@@ -18,6 +18,14 @@ const MESSAGE_HINTS: Array<{ test: RegExp; text: string }> = [
     text: "We couldn’t find this project. Go back to the project list and open it again.",
   },
   {
+    test: /couldn't read this iphone photo|heic|heif/i,
+    text: "Couldn't read this iPhone photo — try exporting as JPEG from Photos, or set Camera → Formats → Most Compatible, then re-upload.",
+  },
+  {
+    test: /couldn't read that image/i,
+    text: "Couldn't read that image. Please upload a JPEG or PNG photo of your ID.",
+  },
+  {
     test: /missing id front|id front image is required/i,
     text: "Upload a clear photo of the front of your ID, then try again.",
   },

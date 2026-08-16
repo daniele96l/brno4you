@@ -8,7 +8,8 @@ import {
   createStudentSession,
   isAdminAuthenticated,
 } from "@/lib/auth";
-import { extensionForMime, fileHash, saveUpload } from "@/lib/storage";
+import { fileHash, saveUpload } from "@/lib/storage";
+import { normalizeIdImageBuffer } from "@/lib/normalize-id-image";
 
 export const runtime = "nodejs";
 
@@ -39,27 +40,27 @@ async function handleFiles(
   let id_back_hash: string | null = null;
 
   if (front instanceof File && front.size > 0) {
-    const buf = Buffer.from(await front.arrayBuffer());
-    const ext = extensionForMime(front.type || "image/jpeg");
+    const raw = Buffer.from(await front.arrayBuffer());
+    const normalized = await normalizeIdImageBuffer(raw, front.type);
     id_front_path = await saveUpload(
-      `ids/${studentId}/front.${ext}`,
-      buf,
-      front.type || "image/jpeg",
+      `ids/${studentId}/front.${normalized.ext}`,
+      normalized.buffer,
+      normalized.contentType,
     );
-    id_front_hash = fileHash(buf);
+    id_front_hash = fileHash(normalized.buffer);
   } else if (requireFront) {
     throw new Error("ID front image is required");
   }
 
   if (back instanceof File && back.size > 0) {
-    const buf = Buffer.from(await back.arrayBuffer());
-    const ext = extensionForMime(back.type || "image/jpeg");
+    const raw = Buffer.from(await back.arrayBuffer());
+    const normalized = await normalizeIdImageBuffer(raw, back.type);
     id_back_path = await saveUpload(
-      `ids/${studentId}/back.${ext}`,
-      buf,
-      back.type || "image/jpeg",
+      `ids/${studentId}/back.${normalized.ext}`,
+      normalized.buffer,
+      normalized.contentType,
     );
-    id_back_hash = fileHash(buf);
+    id_back_hash = fileHash(normalized.buffer);
   }
 
   return { id_front_path, id_back_path, id_front_hash, id_back_hash };

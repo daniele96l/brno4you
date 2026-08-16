@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { studentFormSchema } from "@/lib/student-schema";
 import { applyFormToStudent, getStudent, saveStudent } from "@/lib/students";
 import { canAccessStudent, isAdminAuthenticated } from "@/lib/auth";
-import { extensionForMime, fileHash, saveUpload } from "@/lib/storage";
+import { fileHash, saveUpload } from "@/lib/storage";
+import { normalizeIdImageBuffer } from "@/lib/normalize-id-image";
 
 export const runtime = "nodejs";
 
@@ -76,26 +77,26 @@ export async function PUT(req: Request, ctx: Ctx) {
     let imagesChanged = false;
 
     if (front instanceof File && front.size > 0) {
-      const buf = Buffer.from(await front.arrayBuffer());
-      const ext = extensionForMime(front.type || "image/jpeg");
+      const raw = Buffer.from(await front.arrayBuffer());
+      const normalized = await normalizeIdImageBuffer(raw, front.type);
       student.id_front_path = await saveUpload(
-        `ids/${student.id}/front.${ext}`,
-        buf,
-        front.type || "image/jpeg",
+        `ids/${student.id}/front.${normalized.ext}`,
+        normalized.buffer,
+        normalized.contentType,
       );
-      student.id_front_hash = fileHash(buf);
+      student.id_front_hash = fileHash(normalized.buffer);
       imagesChanged = true;
     }
 
     if (back instanceof File && back.size > 0) {
-      const buf = Buffer.from(await back.arrayBuffer());
-      const ext = extensionForMime(back.type || "image/jpeg");
+      const raw = Buffer.from(await back.arrayBuffer());
+      const normalized = await normalizeIdImageBuffer(raw, back.type);
       student.id_back_path = await saveUpload(
-        `ids/${student.id}/back.${ext}`,
-        buf,
-        back.type || "image/jpeg",
+        `ids/${student.id}/back.${normalized.ext}`,
+        normalized.buffer,
+        normalized.contentType,
       );
-      student.id_back_hash = fileHash(buf);
+      student.id_back_hash = fileHash(normalized.buffer);
       imagesChanged = true;
     }
 
