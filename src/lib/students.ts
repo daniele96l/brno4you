@@ -66,6 +66,17 @@ export async function getStudentByAccessToken(
   return mapStudent(data);
 }
 
+export async function getStudentByEmailAndDocument(
+  email: string,
+  documentNumber: string,
+): Promise<Student | null> {
+  const data = await rpc<Record<string, unknown> | null>(
+    "brno4you_get_student_by_email_doc",
+    { p_email: email, p_document_number: documentNumber },
+  );
+  return mapStudent(data);
+}
+
 export async function listStudents(projectId?: string | null): Promise<Student[]> {
   const data = await rpc<Record<string, unknown>[]>("brno4you_list_students", {
     p_project_id: projectId ?? null,

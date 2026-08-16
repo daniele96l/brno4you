@@ -14,7 +14,7 @@ function appBaseUrl() {
 }
 
 export function accessLinkForToken(token: string) {
-  return `${appBaseUrl().replace(/\/$/, "")}/apply/access/${token}`;
+  return `${appBaseUrl()}/apply/access/${token}`;
 }
 
 export async function sendApprovalEmail(opts: {
@@ -32,6 +32,7 @@ export async function sendApprovalEmail(opts: {
   }
 
   const link = accessLinkForToken(opts.accessToken);
+  const portal = `${appBaseUrl()}/apply/portal`;
   const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({
     from,
@@ -40,15 +41,16 @@ export async function sendApprovalEmail(opts: {
     text:
       `Hi ${opts.firstName},\n\n` +
       `You have been approved for ${opts.projectName}.\n\n` +
-      `Open this link and enter your ID / passport document number to continue ` +
-      `(upload your ID and sign the required documents):\n\n` +
-      `${link}\n\n` +
+      `Open your participant profile:\n${link}\n\n` +
+      `Or go to ${portal} and sign in with your email + the document number from your registration.\n\n` +
+      `There you can see your status and sign the required documents.\n\n` +
       `Brno4You\n`,
     html:
       `<p>Hi ${escapeHtml(opts.firstName)},</p>` +
       `<p>You have been approved for <strong>${escapeHtml(opts.projectName)}</strong>.</p>` +
-      `<p>Open the link below and enter your <strong>ID / passport document number</strong> to access your application, upload your ID, and sign the documents.</p>` +
-      `<p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>` +
+      `<p><a href="${escapeHtml(link)}">Open your participant profile</a></p>` +
+      `<p>Or visit <a href="${escapeHtml(portal)}">${escapeHtml(portal)}</a> and sign in with your email and the <strong>document number</strong> from your registration.</p>` +
+      `<p>There you can check your status and sign the required documents.</p>` +
       `<p>Brno4You</p>`,
   });
   if (error) {

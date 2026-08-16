@@ -4,8 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { explainApiError } from "@/lib/api-error";
 
-export function AccessUnlockForm({ token }: { token: string }) {
+type Props = {
+  /** When set (from approval email), only document number is required. */
+  token?: string;
+};
+
+export function AccessUnlockForm({ token }: Props) {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,14 +25,15 @@ export function AccessUnlockForm({ token }: { token: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          token: token || undefined,
+          email: token ? undefined : email,
           document_number: documentNumber,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
         setError(
-          explainApiError(json.error, "Could not unlock your application"),
+          explainApiError(json.error, "Could not open your participant profile"),
         );
         return;
       }
@@ -36,7 +43,7 @@ export function AccessUnlockForm({ token }: { token: string }) {
       setError(
         err instanceof Error
           ? err.message
-          : "Could not unlock your application",
+          : "Could not open your participant profile",
       );
     } finally {
       setLoading(false);
@@ -45,6 +52,22 @@ export function AccessUnlockForm({ token }: { token: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {!token && (
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium text-[var(--navy)]">
+            Email used in your application
+          </span>
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            placeholder="name@example.com"
+          />
+        </label>
+      )}
       <label className="block space-y-1 text-sm">
         <span className="font-medium text-[var(--navy)]">
           Document number (as on your ID / passport)
@@ -64,7 +87,7 @@ export function AccessUnlockForm({ token }: { token: string }) {
         </p>
       )}
       <button type="submit" className="btn-primary" disabled={loading}>
-        {loading ? "Checking…" : "Open my application"}
+        {loading ? "Opening…" : "Open my profile"}
       </button>
     </form>
   );

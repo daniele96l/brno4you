@@ -4,7 +4,6 @@ import { listProjects, projectTypeLabel } from "@/lib/projects";
 import { ensureSampleDataSeeded } from "@/lib/partners";
 
 export default async function ApplyIndexPage() {
-  // Always load at request time — admin-created projects must appear immediately.
   await connection();
   await ensureSampleDataSeeded();
   const projects = await listProjects();
@@ -14,16 +13,25 @@ export default async function ApplyIndexPage() {
       <div className="panel relative space-y-6 px-6 py-8 sm:px-10 sm:py-10">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--mint-text)]">
-            Student portal
+            Apply
           </p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[var(--navy)]">
             Choose a project
           </h1>
           <p className="mt-3 max-w-xl text-[var(--mint-text)]">
-            Use the invite link from Brno for you, or open one of the projects
-            below.
+            Submit your registration for a project. After the organisers approve
+            you, open your participant profile to check status and sign
+            documents.
           </p>
         </div>
+
+        <Link
+          href="/apply/portal"
+          className="block rounded-2xl border border-[var(--navy)] bg-[var(--sky)]/40 px-4 py-4 text-sm font-semibold text-[var(--navy)]"
+        >
+          Already applied? Open your participant profile →
+        </Link>
+
         <ul className="space-y-3">
           {projects.map((p) => (
             <li key={p.id}>

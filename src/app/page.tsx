@@ -54,16 +54,23 @@ export default function HomePage() {
           <h1 className="text-3xl font-extrabold leading-[1.15] tracking-tight text-[var(--navy)] sm:text-4xl lg:text-[2.65rem]">
             Ready for your Erasmus journey with Brno for you?
           </h1>
-          <p className="max-w-md text-base leading-relaxed text-[var(--mint-text)] sm:text-lg">
-            Submit your details and ID so we can prepare your paperwork. It only
-            takes a few minutes — we’ll check everything against your document.
+          <p className="mt-3 max-w-md text-base leading-relaxed text-[var(--mint-text)] sm:text-lg">
+            Choose a project, submit your registration, and track approval in
+            your participant portal. After you are accepted you can sign the
+            required documents online.
           </p>
           <div className="flex flex-col items-start gap-4 pt-2 sm:flex-row sm:items-center">
             <Link href="/apply" className="btn-link-cta group">
               <span className="cta-icon transition-transform group-hover:translate-x-0.5">
                 ›
               </span>
-              I&apos;m ready to start my application
+              Apply to a project
+            </Link>
+            <Link
+              href="/apply/portal"
+              className="text-sm font-semibold text-[var(--navy)] underline-offset-4 hover:underline"
+            >
+              Open my participant profile
             </Link>
           </div>
           <Link

@@ -803,32 +803,12 @@ export function StudentForm({
         </p>
       )}
 
-      {isPendingApproval && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
-          <p className="font-bold text-[var(--navy)]">Application received</p>
-          <p className="mt-1">
-            Waiting for organiser approval. You will get an email with a link
-            when you can upload your ID and sign documents.
-          </p>
-        </div>
-      )}
-
-      {isRejected && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-950">
-          <p className="font-bold">Application not approved</p>
-          <p className="mt-1">
-            This application was not selected for this project. Contact the
-            organisers if you have questions.
-          </p>
-        </div>
-      )}
-
       {needsIdPhase && !verified && (
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4 text-sm text-[var(--navy)]">
-          <p className="font-bold">You are approved</p>
+          <p className="font-bold">Next step: verify your ID</p>
           <p className="mt-1 text-[var(--mint-text)]">
-            Upload clear photos of your ID / passport so we can verify your
-            details, then sign the project documents.
+            Upload clear photos of your ID / passport, then sign the documents
+            below.
           </p>
         </div>
       )}

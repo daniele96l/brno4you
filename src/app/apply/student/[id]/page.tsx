@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { StudentForm } from "@/components/StudentForm";
+import { ParticipantStatusCard } from "@/components/ParticipantStatusCard";
 import { canAccessStudent } from "@/lib/auth";
 import { getStudent } from "@/lib/students";
 import { getProject, projectTypeLabel } from "@/lib/projects";
 
 type Props = { params: Promise<{ id: string }> };
 
-export default async function EditApplyPage({ params }: Props) {
+export default async function ParticipantProfilePage({ params }: Props) {
   const { id } = await params;
   if (!(await canAccessStudent(id))) {
     notFound();
@@ -31,16 +32,24 @@ export default async function EditApplyPage({ params }: Props) {
       />
       <div className="panel relative space-y-6 px-6 py-8 sm:px-10 sm:py-10">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-[var(--navy)]">
-            Your application
+          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--mint-text)]">
+            Participant portal
+          </p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[var(--navy)]">
+            Your profile
           </h1>
           <p className="mt-2 text-[var(--mint-text)]">
-            Update your details or re-upload your ID, then verify again.
             {project
-              ? ` Project: ${project.name} (${projectTypeLabel(project.type)}).`
-              : ""}
+              ? `${project.name} (${projectTypeLabel(project.type)})`
+              : "Application status and documents"}
           </p>
         </div>
+
+        <ParticipantStatusCard
+          status={student.participation_status}
+          projectName={project?.name}
+        />
+
         <StudentForm
           initial={student}
           projectId={student.project_id}
