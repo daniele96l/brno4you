@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { sendApprovalEmail } from "@/lib/email";
-import { getProject } from "@/lib/projects";
 import { getStudent, saveStudent } from "@/lib/students";
 
 export const runtime = "nodejs";
@@ -51,41 +49,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
   ) {
     const now = new Date().toISOString();
     if (body.participation_status === "approved") {
-      const token = existing.access_token || nanoid(32);
       student = {
         ...student,
         participation_status: "approved",
-        access_token: token,
+        access_token: existing.access_token || nanoid(32),
         approved_at: now,
         rejected_at: null,
       };
-      await saveStudent(student);
-      const project = student.project_id
-        ? await getProject(student.project_id)
-        : null;
-      try {
-        await sendApprovalEmail({
-          to: student.email,
-          firstName: student.first_name,
-          projectName: project?.name || "the project",
-          accessToken: token,
-        });
-      } catch (e) {
-        return NextResponse.json(
-          {
-            student,
-            error:
-              e instanceof Error
-                ? e.message
-                : "Approved, but the email could not be sent",
-            emailSent: false,
-          },
-          { status: 200 },
-        );
-      }
-      return NextResponse.json({ student, emailSent: true });
-    }
-    if (body.participation_status === "rejected") {
+    } else if (body.participation_status === "rejected") {
       student = {
         ...student,
         participation_status: "rejected",
@@ -164,7 +135,6 @@ export async function PUT(req: Request, ctx: Ctx) {
       imagesChanged = true;
     }
 
-    // ID photos only required when approved (post-approval phase)
     if (existing.participation_status === "approved") {
       if (!student.id_front_path) {
         return NextResponse.json(
