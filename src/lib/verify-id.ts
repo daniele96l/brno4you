@@ -62,19 +62,19 @@ export async function extractIdData(
       type: "text",
       text: `Extract identity document fields as JSON only. Keys: first_name, second_name, surname, second_surname, birth_date (YYYY-MM-DD), nationality, document_country, document_number, document_type (id_card|passport), confidence (0-1). Use null for missing fields. Do not invent values. If the image is not a readable ID/passport, set confidence low and leave fields null.`,
     },
-    { type: "image_url", image_url: { url: toDataUrl(frontSmall), detail: "low" } },
+    { type: "image_url", image_url: { url: toDataUrl(frontSmall), detail: "high" } },
   ];
 
   if (back) {
     const backSmall = await downscale(back);
     images.push({
       type: "image_url",
-      image_url: { url: toDataUrl(backSmall), detail: "low" },
+      image_url: { url: toDataUrl(backSmall), detail: "high" },
     });
   }
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     response_format: { type: "json_object" },
     max_tokens: 400,
     messages: [
