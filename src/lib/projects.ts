@@ -11,6 +11,7 @@ import {
   projectTypeShort,
   requiredStudentTemplateIds,
   signableStudentTemplateIds,
+  studentRequestedTemplateIds,
 } from "./project-packs";
 
 export type { MobilityProject, ProjectType };
@@ -22,6 +23,7 @@ export {
   projectTypeShort,
   requiredStudentTemplateIds,
   signableStudentTemplateIds,
+  studentRequestedTemplateIds,
 };
 
 export type ProjectInput = {

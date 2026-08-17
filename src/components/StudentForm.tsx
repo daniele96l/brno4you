@@ -25,9 +25,16 @@ import {
 import type { FieldMismatch, Student } from "@/lib/types";
 import { ParticipantDocuments } from "@/components/ParticipantDocuments";
 import { DocumentsToSignPreview } from "@/components/DocumentsToSignPreview";
+import { TravelPlanForm } from "@/components/TravelPlanForm";
 import type { ProjectFormConfig } from "@/lib/form-config";
 import { DEFAULT_FORM_CONFIG, isOptionalHidden } from "@/lib/form-config";
 import type { ProjectType } from "@/lib/project-packs";
+import { isMinor, isMinorFromBirthParts } from "@/lib/project-packs";
+import {
+  guardianIdRequired,
+  guardianIdUploaded,
+  participantIdVerified,
+} from "@/lib/participant-id";
 import type { FieldPath } from "react-hook-form";
 
 type Props = {
@@ -36,6 +43,8 @@ type Props = {
   projectTitle?: string;
   projectType?: ProjectType;
   formConfig?: ProjectFormConfig;
+  /** Participant portal: ID verify + docs only (no editable registration). */
+  portalMode?: boolean;
 };
 
 /** Map raw/API errors — never a vague “check email/phone/uploads” blob. */
@@ -125,10 +134,19 @@ export function StudentForm({
   projectTitle,
   projectType = "youth_exchange",
   formConfig = DEFAULT_FORM_CONFIG,
+  portalMode = false,
 }: Props) {
   const router = useRouter();
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [guardianFrontFile, setGuardianFrontFile] = useState<File | null>(null);
+  const [guardianBackFile, setGuardianBackFile] = useState<File | null>(null);
+  const [guardianFrontError, setGuardianFrontError] = useState<string | null>(
+    null,
+  );
+  const [guardianBackError, setGuardianBackError] = useState<string | null>(
+    null,
+  );
   const [frontError, setFrontError] = useState<string | null>(null);
   const [backError, setBackError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
@@ -140,11 +158,14 @@ export function StudentForm({
   const [customAnswers, setCustomAnswers] = useState<
     Record<string, string | boolean>
   >(initial?.custom_answers || {});
-  const [mismatches, setMismatches] = useState<FieldMismatch[] | null>(
-    initial?.id_mismatches ?? null,
-  );
+  const [mismatches, setMismatches] = useState<FieldMismatch[] | null>(() => {
+    const status = initial?.id_verification_status;
+    if (status === "matched" || status === "mismatch_dismissed") return null;
+    return initial?.id_mismatches ?? null;
+  });
   const [matchOk, setMatchOk] = useState(
-    initial?.id_verification_status === "matched",
+    initial?.id_verification_status === "matched" ||
+      initial?.id_verification_status === "mismatch_dismissed",
   );
 
   const needsIdPhase = student?.participation_status === "approved";
@@ -157,6 +178,8 @@ export function StudentForm({
 
   const frontPreview = useObjectUrl(frontFile);
   const backPreview = useObjectUrl(backFile);
+  const guardianFrontPreview = useObjectUrl(guardianFrontFile);
+  const guardianBackPreview = useObjectUrl(guardianBackFile);
 
   const initialBirth = splitIsoDate(initial?.birth_date ?? "");
   const [birthY, setBirthY] = useState(initialBirth.y);
@@ -474,8 +497,15 @@ export function StudentForm({
       }
     }
 
+    const participantOkForId =
+      student &&
+      (matchOk || participantIdVerified(student));
+
     const needsFront =
-      needsIdPhase && !student?.id_front_path && !frontFile;
+      needsIdPhase &&
+      !participantOkForId &&
+      !student?.id_front_path &&
+      !frontFile;
     if (needsFront) {
       mistakes.push({
         field: "id_front",
@@ -485,6 +515,7 @@ export function StudentForm({
     }
     const needsBack =
       needsIdPhase &&
+      !participantOkForId &&
       (values.document_type === "id_card" ||
         getValues("document_type") === "id_card") &&
       !student?.id_back_path &&
@@ -494,6 +525,26 @@ export function StudentForm({
         field: "id_back",
         message: formatFieldMistake("id_back", "(no photo selected)"),
         focusId: "id-back-input",
+      });
+    }
+
+    const birthForMinor =
+      values.birth_date || student?.birth_date || birthIsoFromSelects();
+    const participantOk =
+      student &&
+      (matchOk || participantIdVerified(student));
+    if (
+      needsIdPhase &&
+      participantOk &&
+      guardianIdRequired({ birth_date: birthForMinor }) &&
+      !student.guardian_id_front_path &&
+      !guardianFrontFile
+    ) {
+      mistakes.push({
+        field: "guardian_id_front",
+        message:
+          "Parent or legal guardian ID (front) is required for participants under 18.",
+        focusId: "guardian-front-input",
       });
     }
 
@@ -520,7 +571,7 @@ export function StudentForm({
       }
       if (json.student) setStudent(json.student);
       if (json.status === "matched") {
-        setMismatches([]);
+        setMismatches(null);
         setMatchOk(true);
       } else {
         setMatchOk(false);
@@ -544,7 +595,11 @@ export function StudentForm({
     setErrorFocusId(null);
     setFrontError(null);
     setBackError(null);
-    setMatchOk(false);
+    setGuardianFrontError(null);
+    setGuardianBackError(null);
+    if (frontFile || backFile) {
+      setMatchOk(false);
+    }
     const synced = syncAllFieldsFromDom();
     const birth_date = synced.birth_date || birthIsoFromSelects() || data.birth_date;
     const payload = { ...data, ...synced, birth_date };
@@ -619,6 +674,8 @@ export function StudentForm({
       if (needsIdPhase) {
         if (uploadFront) form.set("id_front", uploadFront);
         if (uploadBack) form.set("id_back", uploadBack);
+        if (guardianFrontFile) form.set("guardian_id_front", guardianFrontFile);
+        if (guardianBackFile) form.set("guardian_id_back", guardianBackFile);
       }
 
       const url = student ? `/api/students/${student.id}` : "/api/students";
@@ -691,11 +748,16 @@ export function StudentForm({
       }
 
       setStudent(json.student);
-      if (json.student.participation_status === "approved" && needsIdPhase) {
+      const participantImagesChanged = !!(uploadFront || uploadBack);
+      if (
+        json.student.participation_status === "approved" &&
+        needsIdPhase &&
+        participantImagesChanged
+      ) {
         await verify(json.student.id, true);
       }
       if (!student) {
-        router.replace(`/apply/student/${json.student.id}`);
+        router.replace(`/apply/student/${json.student.id}?registered=1`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -778,11 +840,38 @@ export function StudentForm({
     }
   }
 
-  const verified =
-    needsIdPhase &&
-    (matchOk ||
-      student?.id_verification_status === "matched" ||
-      student?.id_verification_status === "mismatch_dismissed");
+  const participantVerified =
+    matchOk ||
+    (student != null && participantIdVerified(student));
+
+  const birthIsoLive = birthIsoFromSelects() || birthDate || "";
+  const minorFromBirth = birthIsoLive
+    ? isMinor(birthIsoLive)
+    : isMinorFromBirthParts(birthY, birthM, birthD) ??
+      (student?.birth_date ? isMinor(student.birth_date) : false);
+
+  const minor = minorFromBirth;
+
+  const guardianReady =
+    !minor ||
+    (student != null && guardianIdUploaded(student)) ||
+    !!guardianFrontFile;
+
+  const verified = needsIdPhase && participantVerified && guardianReady;
+
+  const needsGuardianUpload =
+    needsIdPhase && participantVerified && minor && !guardianReady;
+
+  const guardianFrontSrc =
+    guardianFrontPreview ||
+    (student?.guardian_id_front_path
+      ? `/api/students/${student.id}/files/guardian_front`
+      : null);
+  const guardianBackSrc =
+    guardianBackPreview ||
+    (student?.guardian_id_back_path
+      ? `/api/students/${student.id}/files/guardian_back`
+      : null);
 
   const frontSrc =
     frontPreview ||
@@ -797,7 +886,7 @@ export function StudentForm({
 
   return (
     <div className="space-y-8">
-      {projectTitle && (
+      {!portalMode && projectTitle && (
         <p className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/40 px-4 py-3 text-sm text-[var(--navy)]">
           Applying for <strong>{projectTitle}</strong>
         </p>
@@ -805,11 +894,24 @@ export function StudentForm({
 
       {needsIdPhase && !verified && (
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4 text-sm text-[var(--navy)]">
-          <p className="font-bold">Next step: verify your ID</p>
-          <p className="mt-1 text-[var(--mint-text)]">
-            Upload clear photos of your ID / passport, then sign the documents
-            below.
-          </p>
+          {needsGuardianUpload ? (
+            <>
+              <p className="font-bold">Next step: parent or guardian ID</p>
+              <p className="mt-1 text-[var(--mint-text)]">
+                Because you are under 18, upload a clear photo of your parent or
+                legal guardian&apos;s ID. They will sign all documents on your
+                behalf.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-bold">Next step: verify your ID</p>
+              <p className="mt-1 text-[var(--mint-text)]">
+                Upload clear photos of your ID / passport, then sign the documents
+                below.
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -935,6 +1037,7 @@ export function StudentForm({
         }}
         className="space-y-6"
       >
+        {!portalMode && (
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">
             Personal details
@@ -1064,11 +1167,24 @@ export function StudentForm({
                   ))}
                 </select>
               </div>
-              {birthIsoFromSelects() && (
+              {birthIsoLive && (
                 <p className="mt-1 text-xs text-[var(--mint-text)]">
-                  Selected: {birthIsoFromSelects()}
+                  Selected: {birthIsoLive}
                 </p>
               )}
+              {minorFromBirth && (
+                <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  You are under 18 — after approval your parent or legal guardian
+                  must upload their ID and sign all documents on your behalf.
+                </p>
+              )}
+              {isMinorFromBirthParts(birthY, birthM, birthD) === null &&
+                birthY &&
+                (!birthM || !birthD) && (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Select month and day to confirm your age.
+                  </p>
+                )}
             </Field>
             <Field label="Nationality" error={errors.nationality?.message}>
               <input className="input" {...register("nationality")} />
@@ -1169,11 +1285,18 @@ export function StudentForm({
             </div>
           )}
         </section>
+        )}
 
+        {(needsIdPhase || !portalMode) && !verified && (
         <section className="space-y-4">
           <h2 className="text-lg font-bold text-[var(--navy)]">
-            Identity document
+            {needsGuardianUpload
+              ? "Upload parent / guardian ID"
+              : portalMode
+                ? "Upload your ID"
+                : "Identity document"}
           </h2>
+          {!portalMode && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Document type" error={errors.document_type?.message}>
               <select className="input" {...register("document_type")}>
@@ -1196,8 +1319,9 @@ export function StudentForm({
               </Field>
             )}
           </div>
+          )}
 
-          {needsIdPhase && (
+          {needsIdPhase && !participantVerified && (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
@@ -1319,17 +1443,140 @@ export function StudentForm({
               )}
             </>
           )}
-        </section>
 
-        {needsIdPhase && (
+          {needsGuardianUpload && (
+            <>
+              <p className="text-sm text-[var(--mint-text)]">
+                Your ID is verified. Upload your parent or legal guardian&apos;s
+                ID — they must sign every document for participants under 18.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label={
+                    student?.guardian_id_front_path
+                      ? "Guardian ID front (upload to replace)"
+                      : "Parent / guardian ID front"
+                  }
+                  error={guardianFrontError || undefined}
+                >
+                  <input
+                    id="guardian-front-input"
+                    type="file"
+                    accept={ID_IMAGE_ACCEPT}
+                    className="input"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setGuardianFrontError(null);
+                      if (!f) {
+                        setGuardianFrontFile(null);
+                        return;
+                      }
+                      setGuardianFrontFile(f);
+                      setConverting(true);
+                      try {
+                        const jpeg = await normalizeImageFile(f);
+                        setGuardianFrontFile(jpeg);
+                      } catch (err) {
+                        setGuardianFrontError(
+                          err instanceof Error && err.message.trim()
+                            ? err.message
+                            : HEIC_CONVERT_ERROR,
+                        );
+                      } finally {
+                        setConverting(false);
+                      }
+                    }}
+                  />
+                </Field>
+                <Field
+                  label={
+                    student?.guardian_id_back_path
+                      ? "Guardian ID back (upload to replace)"
+                      : "Parent / guardian ID back (optional)"
+                  }
+                  error={guardianBackError || undefined}
+                >
+                  <input
+                    id="guardian-back-input"
+                    type="file"
+                    accept={ID_IMAGE_ACCEPT}
+                    className="input"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setGuardianBackError(null);
+                      if (!f) {
+                        setGuardianBackFile(null);
+                        return;
+                      }
+                      setGuardianBackFile(f);
+                      setConverting(true);
+                      try {
+                        const jpeg = await normalizeImageFile(f);
+                        setGuardianBackFile(jpeg);
+                      } catch (err) {
+                        setGuardianBackError(
+                          err instanceof Error && err.message.trim()
+                            ? err.message
+                            : HEIC_CONVERT_ERROR,
+                        );
+                      } finally {
+                        setConverting(false);
+                      }
+                    }}
+                  />
+                </Field>
+              </div>
+
+              {(guardianFrontSrc || guardianBackSrc) && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-[var(--navy)]">
+                    Check the guardian ID upload — make sure the photo is clear
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {guardianFrontSrc && (
+                      <figure className="space-y-2">
+                        <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                          Guardian front
+                        </figcaption>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={guardianFrontSrc}
+                          alt="Guardian ID front preview"
+                          className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                        />
+                      </figure>
+                    )}
+                    {guardianBackSrc && (
+                      <figure className="space-y-2">
+                        <figcaption className="text-xs font-semibold uppercase tracking-wide text-[var(--mint-text)]">
+                          Guardian back
+                        </figcaption>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={guardianBackSrc}
+                          alt="Guardian ID back preview"
+                          className="max-h-[min(70vh,520px)] w-full rounded-2xl border border-[var(--line)] bg-black/5 object-contain"
+                        />
+                      </figure>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+        )}
+
+        {!portalMode && (
           <DocumentsToSignPreview
             projectType={projectType}
-            birthDate={birthDate}
+            birthDate={birthIsoLive || birthDate}
+            isMinorParticipant={minorFromBirth}
             needsTravelDeclaration={student?.needs_travel_declaration ?? false}
           />
         )}
 
-        {!isRejected && (
+        {!isRejected && (!portalMode || (needsIdPhase && !verified)) && (
         <button
           type="submit"
           disabled={submitting || verifying || converting}
@@ -1342,9 +1589,11 @@ export function StudentForm({
                 ? "Saving & verifying…"
                 : "Submitting…"
               : needsIdPhase
-                ? student
-                  ? "Update & verify ID"
-                  : "Save & verify ID"
+                ? needsGuardianUpload
+                  ? "Upload guardian ID"
+                  : student
+                    ? "Update & verify ID"
+                    : "Save & verify ID"
                 : student
                   ? "Update application"
                   : "Submit application"}
@@ -1352,13 +1601,7 @@ export function StudentForm({
         )}
       </form>
 
-      {matchOk && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Your details match the ID document. Please sign the documents below.
-        </div>
-      )}
-
-      {mismatches && mismatches.length > 0 && (
+      {mismatches && mismatches.length > 0 && !verified && (
         <div className="space-y-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-5 text-sm text-amber-950">
           <div>
             <p className="text-base font-bold text-[var(--navy)]">
@@ -1431,19 +1674,16 @@ export function StudentForm({
         </div>
       )}
 
-      {student?.id_verification_status === "mismatch_dismissed" && (
-        <p className="text-sm text-[var(--muted)]">
-          You chose to ignore the differences. You can still sign your documents
-          below; an administrator can review the ID vs your data.
-        </p>
-      )}
-
       {student && needsIdPhase && (
         <ParticipantDocuments
-          key={`${student.id}-${student.id_verification_status}-${matchOk}`}
+          key={`${student.id}-${student.id_verification_status}-${student.guardian_id_front_path}-${matchOk}-${(student.requested_template_ids || []).join(",")}`}
           student={student}
           unlocked={!!verified}
         />
+      )}
+
+      {student && needsIdPhase && verified && (
+        <TravelPlanForm student={student} onUpdate={setStudent} />
       )}
     </div>
   );

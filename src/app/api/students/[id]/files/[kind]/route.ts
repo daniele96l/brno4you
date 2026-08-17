@@ -22,7 +22,11 @@ export async function GET(_req: Request, ctx: Ctx) {
       ? student.id_front_path
       : kind === "back"
         ? student.id_back_path
-        : null;
+        : kind === "guardian_front"
+          ? student.guardian_id_front_path
+          : kind === "guardian_back"
+            ? student.guardian_id_back_path
+            : null;
 
   if (!path) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });

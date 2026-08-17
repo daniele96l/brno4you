@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
+import { participantReadyForDocuments } from "@/lib/participant-id";
 import { ensureStudentDocuments } from "@/lib/documents/ensure";
 import { getStudent, listStudentDocuments } from "@/lib/students";
 import {
@@ -45,11 +46,11 @@ export async function GET(_req: Request, ctx: Ctx) {
       scope: t.scope,
     })),
     project,
-    verified:
-      student.participation_status === "approved" &&
-      (student.id_verification_status === "matched" ||
-        student.id_verification_status === "mismatch_dismissed"),
+    verified: participantReadyForDocuments(student),
     participation_status: student.participation_status,
+    requested_template_ids: student.requested_template_ids || [],
+    docs_requested_at: student.docs_requested_at,
+    travel_plan_status: student.travel_plan_status,
   });
 }
 
@@ -63,16 +64,36 @@ export async function POST(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const verified =
-    student.id_verification_status === "matched" ||
-    student.id_verification_status === "mismatch_dismissed";
   if (student.participation_status !== "approved") {
     return NextResponse.json(
       { error: "Documents are available after your application is approved" },
       { status: 400 },
     );
   }
-  if (!verified) {
+  if (!student.requested_template_ids?.length) {
+    return NextResponse.json(
+      {
+        error:
+          "The organisers have not requested any documents for you to sign yet.",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!participantReadyForDocuments(student)) {
+    if (
+      student.participation_status === "approved" &&
+      (student.id_verification_status === "matched" ||
+        student.id_verification_status === "mismatch_dismissed")
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Upload the parent or legal guardian ID before documents can be prepared.",
+        },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
       { error: "Complete ID verification before generating documents" },
       { status: 400 },

@@ -15,6 +15,7 @@ import {
   signableStudentTemplateIds,
 } from "@/lib/project-packs";
 import { RegistrationFormBuilder } from "@/components/RegistrationFormBuilder";
+import { AdminParticipantDocsPanel } from "@/components/AdminParticipantDocsPanel";
 
 type TemplateItem = {
   id: string;
@@ -53,6 +54,9 @@ export function ProjectDashboard({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [docsPickerStudent, setDocsPickerStudent] = useState<Student | null>(
+    null,
+  );
 
   const studentTemplates = useMemo(() => {
     const allowed = new Set(availableStudentTemplateIds(project));
@@ -127,8 +131,9 @@ export function ProjectDashboard({
     }
     if (participation_status === "approved") {
       setMessage(
-        `Approved ${student.first_name}. They can open /apply/portal with email + document number.`,
+        `Approved ${student.first_name}. Choose which documents they must sign.`,
       );
+      setDocsPickerStudent(json.student || student);
     } else {
       setMessage(`${student.first_name} marked as not approved.`);
     }
@@ -215,7 +220,12 @@ export function ProjectDashboard({
       return;
     }
     setProject(json.project);
-    setMessage("Settings saved");
+    const n = typeof json.regenerated === "number" ? json.regenerated : 0;
+    setMessage(
+      n > 0
+        ? `Settings saved. Regenerated ${n} unsigned document(s) with the new project details.`
+        : "Settings saved. Project name, number, dates and venue will appear on new documents.",
+    );
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -223,7 +233,7 @@ export function ProjectDashboard({
     { id: "participants", label: "Participants" },
     { id: "partners", label: "Partners" },
     { id: "documents", label: "Documents" },
-    { id: "settings", label: "Settings" },
+    { id: "settings", label: "Project details" },
   ];
 
   return (
@@ -345,15 +355,19 @@ export function ProjectDashboard({
                       </span>
                     </td>
                     <td className="px-4 py-3 tabular-nums">
-                      <span
-                        className={
-                          c.signed === c.total && c.total > 0
-                            ? "font-medium text-emerald-800"
-                            : "text-[var(--navy)]"
-                        }
-                      >
-                        {c.signed}/{c.total} signed
-                      </span>
+                      {c.total === 0 ? (
+                        <span className="text-[var(--muted)]">Not set</span>
+                      ) : (
+                        <span
+                          className={
+                            c.signed === c.total
+                              ? "font-medium text-emerald-800"
+                              : "text-[var(--navy)]"
+                          }
+                        >
+                          {c.signed}/{c.total} signed
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button
@@ -379,6 +393,18 @@ export function ProjectDashboard({
                             Approve
                           </button>
                         )}
+                        {s.participation_status === "approved" && (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={loading}
+                            onClick={() => setDocsPickerStudent(s)}
+                          >
+                            {s.requested_template_ids?.length
+                              ? "Edit documents"
+                              : "Choose documents"}
+                          </button>
+                        )}
                         {s.participation_status !== "rejected" && (
                           <button
                             type="button"
@@ -396,6 +422,56 @@ export function ProjectDashboard({
               })}
             </tbody>
           </table>
+
+          {docsPickerStudent && (
+            <div
+              className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-4 sm:items-center"
+              role="presentation"
+              onClick={() => setDocsPickerStudent(null)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="docs-picker-title"
+                className="max-h-[90vh] w-full max-w-lg overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-t-2xl bg-white px-4 pt-4">
+                  <h2
+                    id="docs-picker-title"
+                    className="text-base font-bold text-[var(--navy)]"
+                  >
+                    Documents for {docsPickerStudent.first_name}{" "}
+                    {docsPickerStudent.surname}
+                  </h2>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setDocsPickerStudent(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <AdminParticipantDocsPanel
+                  key={docsPickerStudent.id}
+                  student={docsPickerStudent}
+                  templates={studentTemplates.map((t) => ({
+                    id: t.id,
+                    label: t.label,
+                  }))}
+                  documents={docs.filter(
+                    (d) => d.student_id === docsPickerStudent.id,
+                  )}
+                  onStudentUpdate={(updated) => {
+                    setDocsPickerStudent(updated);
+                    setStudents((prev) =>
+                      prev.map((x) => (x.id === updated.id ? updated : x)),
+                    );
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -528,7 +604,7 @@ export function ProjectDashboard({
                           {s.first_name} {s.surname}
                           {!needed && (
                             <span className="ml-2 text-xs text-[var(--muted)]">
-                              (optional)
+                              (not requested)
                             </span>
                           )}
                         </td>
@@ -555,7 +631,9 @@ export function ProjectDashboard({
                               </a>
                             ) : (
                               <span className="text-xs text-[var(--muted)]">
-                                Auto-generated after ID verify
+                                {needed
+                                  ? "Generated after participant opens portal"
+                                  : "Not requested for this person"}
                               </span>
                             )}
                           </div>
@@ -572,16 +650,21 @@ export function ProjectDashboard({
 
       {tab === "settings" && (
         <form onSubmit={saveSettings} className="panel space-y-4 p-6">
+          <p className="text-sm text-[var(--mint-text)]">
+            Project name, number, dates and venue are filled into every
+            participant document. Name / surname / date of birth come from each
+            participant&apos;s registration.
+          </p>
           {(
             [
               ["name", "Display name"],
               ["slug", "Invite slug (/apply/…)"],
               ["project_name", "Project name (in documents)"],
               ["accreditation_no", "Accreditation No."],
-              ["project_no", "Project No."],
+              ["project_no", "Project No. (required for documents)"],
               ["project_period", "Project period"],
-              ["dates", "Dates"],
-              ["venue", "Venue"],
+              ["dates", "Dates including travel (required for documents)"],
+              ["venue", "Venue (required for documents)"],
               ["coordinator_name", "Coordinator name"],
               ["coordinator_email", "Coordinator email"],
               ["coordinator_phone", "Coordinator phone"],
@@ -594,6 +677,9 @@ export function ProjectDashboard({
                 value={String(project[key] ?? "")}
                 onChange={(e) =>
                   setProject({ ...project, [key]: e.target.value })
+                }
+                required={
+                  key === "project_no" || key === "dates" || key === "venue"
                 }
               />
             </label>

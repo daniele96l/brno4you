@@ -32,6 +32,8 @@ function mapStudent(raw: Record<string, unknown> | null): Student | null {
     id_extracted: (raw.id_extracted as Student["id_extracted"]) ?? null,
     id_mismatches: (raw.id_mismatches as Student["id_mismatches"]) ?? null,
     id_verified_at: (raw.id_verified_at as string) ?? null,
+    guardian_id_front_path: (raw.guardian_id_front_path as string) ?? null,
+    guardian_id_back_path: (raw.guardian_id_back_path as string) ?? null,
     participation_status:
       (raw.participation_status as Student["participation_status"]) ||
       "registered",
@@ -40,6 +42,18 @@ function mapStudent(raw: Record<string, unknown> | null): Student | null {
     rejected_at: (raw.rejected_at as string) ?? null,
     custom_answers:
       (raw.custom_answers as Record<string, string | boolean>) || {},
+    requested_template_ids: Array.isArray(raw.requested_template_ids)
+      ? (raw.requested_template_ids as string[])
+      : [],
+    docs_requested_at: (raw.docs_requested_at as string) ?? null,
+    travel_plan_status:
+      (raw.travel_plan_status as Student["travel_plan_status"]) || "none",
+    travel_plan_text: (raw.travel_plan_text as string) ?? null,
+    travel_plan_files: Array.isArray(raw.travel_plan_files)
+      ? (raw.travel_plan_files as Student["travel_plan_files"])
+      : [],
+    travel_plan_requested_at: (raw.travel_plan_requested_at as string) ?? null,
+    travel_plan_submitted_at: (raw.travel_plan_submitted_at as string) ?? null,
     created_at: String(raw.created_at),
     updated_at: String(raw.updated_at),
   };
@@ -115,11 +129,20 @@ export function createStudentFromForm(
     id_extracted: null,
     id_mismatches: null,
     id_verified_at: null,
+    guardian_id_front_path: null,
+    guardian_id_back_path: null,
     participation_status: "registered",
     access_token: null,
     approved_at: null,
     rejected_at: null,
     custom_answers: customAnswers,
+    requested_template_ids: [],
+    docs_requested_at: null,
+    travel_plan_status: "none",
+    travel_plan_text: null,
+    travel_plan_files: [],
+    travel_plan_requested_at: null,
+    travel_plan_submitted_at: null,
     created_at: now,
     updated_at: now,
   };

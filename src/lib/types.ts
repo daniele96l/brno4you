@@ -8,6 +8,14 @@ export type IdVerificationStatus =
 
 export type ParticipationStatus = "registered" | "approved" | "rejected";
 
+export type TravelPlanStatus = "none" | "requested" | "submitted";
+
+export type TravelPlanFile = {
+  path: string;
+  filename: string;
+  contentType: string;
+};
+
 export type FieldMismatch = {
   field: string;
   formValue: string;
@@ -52,11 +60,20 @@ export type Student = {
   id_extracted: ExtractedIdData | null;
   id_mismatches: FieldMismatch[] | null;
   id_verified_at: string | null;
+  guardian_id_front_path: string | null;
+  guardian_id_back_path: string | null;
   participation_status: ParticipationStatus;
   access_token: string | null;
   approved_at: string | null;
   rejected_at: string | null;
   custom_answers: Record<string, string | boolean>;
+  requested_template_ids: string[];
+  docs_requested_at: string | null;
+  travel_plan_status: TravelPlanStatus;
+  travel_plan_text: string | null;
+  travel_plan_files: TravelPlanFile[];
+  travel_plan_requested_at: string | null;
+  travel_plan_submitted_at: string | null;
   created_at: string;
   updated_at: string;
 };

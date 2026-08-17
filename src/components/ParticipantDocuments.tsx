@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { explainApiError } from "@/lib/api-error";
+import { documentsSignedByGuardian } from "@/lib/participant-id";
 import type { GeneratedDocument, Student } from "@/lib/types";
 
 type TemplateItem = { id: string; label: string };
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function ParticipantDocuments({ student, unlocked }: Props) {
+  const guardianSigns = documentsSignedByGuardian(student);
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const [docs, setDocs] = useState<GeneratedDocument[]>([]);
   const [required, setRequired] = useState<string[]>([]);
@@ -22,7 +24,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [signingOpen, setSigningOpen] = useState(false);
   const [signerName, setSignerName] = useState(
-    `${student.first_name} ${student.surname}`.trim(),
+    guardianSigns ? "" : `${student.first_name} ${student.surname}`.trim(),
   );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -64,6 +66,12 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
       setLoading(true);
       setError(null);
       try {
+        await load();
+        const requested = student.requested_template_ids || [];
+        if (!requested.length) {
+          setLoading(false);
+          return;
+        }
         const res = await fetch(`/api/students/${student.id}/documents`, {
           method: "POST",
         });
@@ -96,7 +104,7 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
         setLoading(false);
       }
     })();
-  }, [unlocked, student.id, load]);
+  }, [unlocked, student.id, student.requested_template_ids, load]);
 
   function labelFor(templateId: string) {
     return templates.find((t) => t.id === templateId)?.label || templateId;
@@ -178,7 +186,11 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
   async function confirmSign() {
     if (!currentDoc || !canvasRef.current) return;
     if (!signerName.trim()) {
-      setError("Type your full name before confirming the signature.");
+      setError(
+        guardianSigns
+          ? "Type the parent or legal guardian's full name before confirming."
+          : "Type your full name before confirming the signature.",
+      );
       return;
     }
     setLoading(true);
@@ -224,22 +236,51 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
     return null;
   }
 
+  const requested = student.requested_template_ids || [];
   const signedCount = signableIds.filter(
     (tid) => docFor(tid)?.status === "signed",
   ).length;
+
+  if (!requested.length && !signableIds.length) {
+    return (
+      <div ref={sectionRef} className="space-y-2 scroll-mt-8 rounded-2xl border border-[var(--line)] bg-[var(--sky)]/20 px-4 py-4">
+        <h2 className="text-lg font-bold text-[var(--navy)]">
+          Documents to sign
+        </h2>
+        <p className="text-sm text-[var(--mint-text)]">
+          The organisers have not asked you to sign any documents yet. Check
+          back after they send you the invite link.
+        </p>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 whitespace-pre-line"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={sectionRef} className="space-y-4 scroll-mt-8">
       <div>
         <h2 className="text-lg font-bold text-[var(--navy)]">
-          Sign with your verified ID
+          Documents requested for you
         </h2>
         <p className="text-sm text-[var(--mint-text)]">
-          Your ID was checked. Sign one document at a time
-          {signableIds.length
-            ? ` (${signedCount}/${signableIds.length} done)`
-            : ""}
-          {loading ? " · preparing PDFs…" : ""}.
+          {guardianSigns
+            ? `Because you are under 18, your parent or legal guardian must sign each document below${
+                signableIds.length
+                  ? ` (${signedCount}/${signableIds.length} done)`
+                  : ""
+              }${loading ? " · preparing PDFs…" : "."}`
+            : `The organisers asked you to sign the documents below. Sign one at a time${
+                signableIds.length
+                  ? ` (${signedCount}/${signableIds.length} done)`
+                  : ""
+              }${loading ? " · preparing PDFs…" : "."}`}
         </p>
       </div>
 
@@ -254,7 +295,8 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
 
       {allSigned ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          All documents are signed. You can close this page.
+          All requested documents are signed. Wait for the organisers if they
+          ask for your travel plan next.
         </div>
       ) : (
         currentId && (
@@ -275,8 +317,9 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               {labelFor(currentId)}
             </h3>
             <p className="text-sm text-[var(--mint-text)]">
-              Filled with your application data and linked to the ID you
-              uploaded.
+              {guardianSigns
+                ? "Filled with your application data. The parent or legal guardian signs on your behalf."
+                : "Filled with your application data and linked to the ID you uploaded."}
             </p>
 
             {!currentDoc && !loading && (
@@ -304,7 +347,9 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
                   onClick={() => {
                     setError(null);
                     setSignerName(
-                      `${student.first_name} ${student.surname}`.trim(),
+                      guardianSigns
+                        ? ""
+                        : `${student.first_name} ${student.surname}`.trim(),
                     );
                     setSigningOpen(true);
                   }}
@@ -398,8 +443,9 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
               Sign: {labelFor(currentDoc.template_id)}
             </h3>
             <p className="text-sm text-[var(--mint-text)]">
-              Your identity was verified with the ID you uploaded. Draw your
-              signature and type your full name.
+              {guardianSigns
+                ? "Draw the parent or legal guardian's signature and type their full name exactly as on their ID."
+                : "Your identity was verified with the ID you uploaded. Draw your signature and type your full name."}
             </p>
             {error && (
               <p
@@ -419,11 +465,16 @@ export function ParticipantDocuments({ student, unlocked }: Props) {
             </a>
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-[var(--navy)]">
-                Full name (typed)
+                {guardianSigns
+                  ? "Parent / guardian full name (typed)"
+                  : "Full name (typed)"}
               </span>
               <input
                 className="input"
                 value={signerName}
+                placeholder={
+                  guardianSigns ? "Name as shown on guardian ID" : undefined
+                }
                 onChange={(e) => setSignerName(e.target.value)}
               />
             </label>

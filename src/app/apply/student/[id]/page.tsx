@@ -1,14 +1,20 @@
 import { notFound } from "next/navigation";
-import { StudentForm } from "@/components/StudentForm";
-import { ParticipantStatusCard } from "@/components/ParticipantStatusCard";
+import { ParticipantPortalHome } from "@/components/ParticipantPortalHome";
 import { canAccessStudent } from "@/lib/auth";
 import { getStudent } from "@/lib/students";
-import { getProject, projectTypeLabel } from "@/lib/projects";
+import { getProject } from "@/lib/projects";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ registered?: string }>;
+};
 
-export default async function ParticipantProfilePage({ params }: Props) {
+export default async function ParticipantProfilePage({
+  params,
+  searchParams,
+}: Props) {
   const { id } = await params;
+  const { registered } = await searchParams;
   if (!(await canAccessStudent(id))) {
     notFound();
   }
@@ -36,26 +42,20 @@ export default async function ParticipantProfilePage({ params }: Props) {
             Participant portal
           </p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[var(--navy)]">
-            Your profile
+            Your applications
           </h1>
           <p className="mt-2 text-[var(--mint-text)]">
-            {project
-              ? `${project.name} (${projectTypeLabel(project.type)})`
-              : "Application status and documents"}
+            Check status, open a project for your submitted details, and
+            complete next steps when approved.
           </p>
         </div>
 
-        <ParticipantStatusCard
-          status={student.participation_status}
-          projectName={project?.name}
-        />
-
-        <StudentForm
-          initial={student}
-          projectId={student.project_id}
-          projectTitle={project?.name}
-          projectType={project?.type}
-          formConfig={project?.form_config}
+        <ParticipantPortalHome
+          student={student}
+          project={project}
+          showRegisteredModal={
+            student.participation_status === "registered" && registered === "1"
+          }
         />
       </div>
     </div>

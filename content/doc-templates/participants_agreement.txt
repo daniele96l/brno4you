@@ -13,7 +13,7 @@ Venue (place, country): {{venue}}
 
 This agreement is complementary to the Erasmus+ project application, the grant agreement concluded for the project, the Erasmus+ Programme Guide and the applicable Erasmus+ Quality Standards. It specifies the role, rights and duties of participants in the above-mentioned Youth Mobility Project organised by Brno for you, z.s. as the hosting organisation.
 
-I, (participants name and surname)				Date of birth: 
+I, {{full_name}}				Date of birth: {{birth_date}}
 
 
 hereby declare that I have read, understood and agree with this Participant Agreement. I declare that the information provided by me is true and complete and that I will follow the rules and instructions connected with my participation in the project.

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getStudent, listStudentDocuments } from "@/lib/students";
-import { GenerateDocumentForm } from "@/components/GenerateDocumentForm";
+import { AdminStudentActions } from "@/components/AdminStudentActions";
 import { ensureTemplatesSeeded } from "@/lib/documents/seed";
 import { listDocTemplates } from "@/lib/documents/templates";
 import {
@@ -70,11 +70,7 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
         <p className="text-sm text-[var(--mint-text)]">
           Participation: {student.participation_status} · Verification:{" "}
           {student.id_verification_status}
-          {project
-            ? ` · ${projectTypeLabel(project.type)} · travel declaration: ${
-                student.needs_travel_declaration ? "yes" : "no"
-              }`
-            : ""}
+          {project ? ` · ${projectTypeLabel(project.type)}` : ""}
         </p>
       </div>
 
@@ -138,15 +134,40 @@ export default async function AdminStudentPage({ params, searchParams }: Props) 
         </div>
       </div>
 
-      <div className="panel space-y-4 px-5 py-5">
-        <h2 className="text-base font-semibold">Documents</h2>
-        <GenerateDocumentForm
-          studentId={student.id}
-          templates={templates}
-          initialDocuments={documents}
-          preselectedId={doc}
-        />
-      </div>
+      {(student.guardian_id_front_path || student.guardian_id_back_path) && (
+        <div className="panel space-y-4 px-5 py-5">
+          <h2 className="text-base font-semibold">Parent / guardian ID</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {student.guardian_id_front_path && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/students/${student.id}/files/guardian_front`}
+                alt="Guardian ID front"
+                className="max-h-72 w-full rounded-lg border border-[var(--line)] object-contain bg-white"
+              />
+            )}
+            {student.guardian_id_back_path && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/students/${student.id}/files/guardian_back`}
+                alt="Guardian ID back"
+                className="max-h-72 w-full rounded-lg border border-[var(--line)] object-contain bg-white"
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      <AdminStudentActions
+        initialStudent={student}
+        templates={templates.map((t) => ({
+          id: t.id,
+          label: t.label,
+          scope: t.scope as "student" | "general",
+        }))}
+        initialDocuments={documents}
+        preselectedId={doc}
+      />
     </div>
   );
 }

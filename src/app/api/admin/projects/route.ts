@@ -31,6 +31,15 @@ export async function POST(req: Request) {
   if (body.type !== "youth_exchange" && body.type !== "training_course") {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
+  if (!body.project_no?.trim() || !body.dates?.trim() || !body.venue?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          "project_no, dates and venue are required — they appear on signed documents",
+      },
+      { status: 400 },
+    );
+  }
   const project = createProject(body);
   const saved = await saveProject(project);
   return NextResponse.json({ project: saved });

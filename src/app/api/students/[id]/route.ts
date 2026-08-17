@@ -33,6 +33,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     needs_travel_declaration?: boolean;
     project_id?: string;
     participation_status?: "registered" | "approved" | "rejected";
+    requested_template_ids?: string[];
+    travel_plan_status?: "none" | "requested" | "submitted";
   };
 
   let student = {
@@ -42,6 +44,38 @@ export async function PATCH(req: Request, ctx: Ctx) {
     project_id: body.project_id ?? existing.project_id,
     updated_at: new Date().toISOString(),
   };
+
+  if (Array.isArray(body.requested_template_ids)) {
+    const ids = body.requested_template_ids
+      .map((x) => String(x).trim())
+      .filter(Boolean);
+    student = {
+      ...student,
+      requested_template_ids: ids,
+      docs_requested_at: ids.length
+        ? existing.docs_requested_at || new Date().toISOString()
+        : null,
+    };
+  }
+
+  if (
+    body.travel_plan_status &&
+    body.travel_plan_status !== existing.travel_plan_status
+  ) {
+    const now = new Date().toISOString();
+    if (body.travel_plan_status === "requested") {
+      student = {
+        ...student,
+        travel_plan_status: "requested",
+        travel_plan_requested_at: now,
+      };
+    } else {
+      student = {
+        ...student,
+        travel_plan_status: body.travel_plan_status,
+      };
+    }
+  }
 
   if (
     body.participation_status &&
@@ -133,6 +167,29 @@ export async function PUT(req: Request, ctx: Ctx) {
       );
       student.id_back_hash = fileHash(normalized.buffer);
       imagesChanged = true;
+    }
+
+    const guardianFront = form.get("guardian_id_front");
+    const guardianBack = form.get("guardian_id_back");
+
+    if (guardianFront instanceof File && guardianFront.size > 0) {
+      const raw = Buffer.from(await guardianFront.arrayBuffer());
+      const normalized = await normalizeIdImageBuffer(raw, guardianFront.type);
+      student.guardian_id_front_path = await saveUpload(
+        `ids/${student.id}/guardian-front.${normalized.ext}`,
+        normalized.buffer,
+        normalized.contentType,
+      );
+    }
+
+    if (guardianBack instanceof File && guardianBack.size > 0) {
+      const raw = Buffer.from(await guardianBack.arrayBuffer());
+      const normalized = await normalizeIdImageBuffer(raw, guardianBack.type);
+      student.guardian_id_back_path = await saveUpload(
+        `ids/${student.id}/guardian-back.${normalized.ext}`,
+        normalized.buffer,
+        normalized.contentType,
+      );
     }
 
     if (existing.participation_status === "approved") {

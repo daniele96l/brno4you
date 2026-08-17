@@ -60,5 +60,24 @@ export async function ensureTemplatesSeeded(force = false) {
     }
   }
 
+  // Refresh participants agreement if name/DOB placeholders are missing
+  const agreement = existing.find((t) => t.id === "participants_agreement");
+  if (agreement && !agreement.body.includes("{{full_name}}")) {
+    const entry = index.find((e) => e.id === "participants_agreement");
+    if (entry) {
+      const body = await readFile(
+        path.join(process.cwd(), "content/doc-templates", entry.file),
+        "utf8",
+      );
+      await saveDocTemplate({
+        id: entry.id,
+        label: entry.label,
+        scope: entry.scope,
+        body,
+        sort_order: agreement.sort_order,
+      });
+    }
+  }
+
   return listDocTemplates();
 }

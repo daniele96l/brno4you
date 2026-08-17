@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getProject, saveProject, type MobilityProject } from "@/lib/projects";
+import { regenerateUnsignedForProject } from "@/lib/documents/ensure";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -33,5 +34,6 @@ export async function PUT(req: Request, { params }: Props) {
     updated_at: new Date().toISOString(),
   };
   const project = await saveProject(updated);
-  return NextResponse.json({ project });
+  const regenerated = await regenerateUnsignedForProject(project.id);
+  return NextResponse.json({ project, regenerated });
 }

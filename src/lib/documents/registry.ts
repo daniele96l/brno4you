@@ -12,6 +12,12 @@ import {
   studentFullName,
 } from "./templates";
 import { studentSummaryTemplate } from "./student-summary";
+import {
+  fillDocxTemplate,
+  loadDocxTemplateFile,
+  type DocxFillData,
+} from "./fill-docx";
+import { docxBufferToPdf } from "./docx-to-pdf";
 
 export { studentSummaryTemplate };
 
@@ -47,18 +53,56 @@ export async function generateFromDbTemplate(
   if (!resolved) throw new Error("Project not found for document generation");
 
   const settings = settingsFromProject(resolved);
-  const filled = fillTemplate(
-    template.body,
-    buildPlaceholderMap(settings, student, partner),
-  );
-  const buffer = await textToPdf(template.label, filled);
-
+  const vars = buildPlaceholderMap(settings, student, partner);
   const slug = student
     ? studentFullName(student).replace(/\s+/g, "-").toLowerCase() || student.id
     : partner
       ? partner.name.replace(/\s+/g, "-").toLowerCase()
       : "general";
 
+  const docxTemplate = await loadDocxTemplateFile(templateId);
+  if (docxTemplate) {
+    const fillData: DocxFillData = {
+      project_name: vars.project_name,
+      accreditation_no: vars.accreditation_no,
+      project_no: vars.project_no,
+      project_period: vars.project_period,
+      dates: vars.dates,
+      venue: vars.venue,
+      coordinator_name: vars.coordinator_name,
+      coordinator_email: vars.coordinator_email,
+      coordinator_phone: vars.coordinator_phone,
+      full_name: vars.full_name,
+      birth_date: vars.birth_date,
+      nationality: vars.nationality,
+      phone: vars.phone,
+      email: vars.email,
+      partner_name: vars.partner_name,
+      partner_oid: vars.partner_oid,
+      partner_national_id: vars.partner_national_id,
+      partner_address: vars.partner_address,
+      partner_legal_representative: vars.partner_legal_representative,
+      partner_coordinator_name: vars.partner_coordinator_name,
+      partner_email: vars.partner_email,
+      partner_phone: vars.partner_phone,
+      partner_country: vars.partner_country,
+      sending_organisation: partner
+        ? `${partner.name}, ${partner.country}`
+        : "",
+    };
+    const filledDocx = await fillDocxTemplate(docxTemplate, fillData);
+    const buffer = await docxBufferToPdf(filledDocx);
+    return {
+      buffer,
+      filename: `brno4you-${template.id}-${slug}.pdf`,
+      mime: "application/pdf" as const,
+      template,
+    };
+  }
+
+  // Fallback for templates without a DOCX file
+  const filled = fillTemplate(template.body, vars);
+  const buffer = await textToPdf(template.label, filled);
   return {
     buffer,
     filename: `brno4you-${template.id}-${slug}.pdf`,

@@ -49,10 +49,17 @@ export function textToPdf(title: string, body: string): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.fillColor("#243a8c").fontSize(14).font("Helvetica-Bold").text(title, {
-      align: "left",
-    });
-    doc.moveDown(0.8);
+    // Body already includes the document title — don't duplicate it.
+    const bodyStartsWithTitle = body
+      .trimStart()
+      .toLowerCase()
+      .startsWith(title.trim().toLowerCase());
+    if (!bodyStartsWithTitle) {
+      doc.fillColor("#243a8c").fontSize(14).font("Helvetica-Bold").text(title, {
+        align: "left",
+      });
+      doc.moveDown(0.8);
+    }
     doc.fillColor("#111").font("Helvetica").fontSize(10);
 
     const paragraphs = body.split(/\n{2,}/);

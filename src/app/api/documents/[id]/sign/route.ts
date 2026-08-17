@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canAccessStudent } from "@/lib/auth";
+import { participantReadyForDocuments, documentsSignedByGuardian } from "@/lib/participant-id";
 import { signatureLooksBlank, stampSignedPdf } from "@/lib/documents/pdf";
 import { getDocument, getStudent, saveDocument } from "@/lib/students";
 import { getDocTemplate } from "@/lib/documents/templates";
@@ -24,12 +25,13 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Student not found" }, { status: 404 });
   }
 
-  const verified =
-    student.id_verification_status === "matched" ||
-    student.id_verification_status === "mismatch_dismissed";
-  if (!verified) {
+  if (!participantReadyForDocuments(student)) {
     return NextResponse.json(
-      { error: "Complete ID verification before signing" },
+      {
+        error: documentsSignedByGuardian(student)
+          ? "Upload the parent or legal guardian ID before signing."
+          : "Complete ID verification before signing",
+      },
       { status: 400 },
     );
   }
@@ -49,6 +51,21 @@ export async function POST(req: Request, ctx: Ctx) {
       { status: 400 },
     );
   }
+
+  if (documentsSignedByGuardian(student)) {
+    const studentName =
+      `${student.first_name} ${student.surname}`.trim().toLowerCase();
+    if (signerName.toLowerCase() === studentName) {
+      return NextResponse.json(
+        {
+          error:
+            "Participants under 18 must be signed by a parent or legal guardian, not the participant.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   if (!body.signaturePngBase64) {
     return NextResponse.json(
       { error: "Signature drawing is required" },

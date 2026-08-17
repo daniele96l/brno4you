@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { RegistrationReceivedModal } from "@/components/RegistrationReceivedModal";
 import type { ParticipationStatus } from "@/lib/types";
 
 export function ParticipantStatusCard({
@@ -7,17 +11,26 @@ export function ParticipantStatusCard({
   status: ParticipationStatus;
   projectName?: string | null;
 }) {
+  const [modalOpen, setModalOpen] = useState(status === "registered");
+
   if (status === "registered") {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
-        <p className="font-bold text-[var(--navy)]">Waiting for approval</p>
-        <p className="mt-1">
-          Your application
-          {projectName ? ` for ${projectName}` : ""} was received. The
-          organisation has not decided yet. When you are approved, open your
-          participant profile again to sign documents.
-        </p>
-      </div>
+      <>
+        <RegistrationReceivedModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          projectName={projectName}
+        />
+        {!modalOpen && (
+          <button
+            type="button"
+            className="text-sm font-medium text-[var(--navy)] underline"
+            onClick={() => setModalOpen(true)}
+          >
+            Waiting for approval — view status
+          </button>
+        )}
+      </>
     );
   }
   if (status === "rejected") {

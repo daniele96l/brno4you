@@ -7,6 +7,7 @@ import {
   extractIdData,
   isIdVerificationMatched,
 } from "@/lib/verify-id";
+import { participantReadyForDocuments } from "@/lib/participant-id";
 import { ensureStudentDocuments } from "@/lib/documents/ensure";
 
 export const runtime = "nodejs";
@@ -15,13 +16,7 @@ async function ensureDocsSafe(studentId: string) {
   try {
     const student = await getStudent(studentId);
     if (!student) return;
-    if (student.participation_status !== "approved") return;
-    if (
-      student.id_verification_status !== "matched" &&
-      student.id_verification_status !== "mismatch_dismissed"
-    ) {
-      return;
-    }
+    if (!participantReadyForDocuments(student)) return;
     await ensureStudentDocuments(student);
   } catch {
     // Non-fatal: participant UI can retry via POST /documents

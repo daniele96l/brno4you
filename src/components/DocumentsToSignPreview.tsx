@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import {
   availableStudentTemplateIds,
   isMinor,
-  requiredStudentTemplateIds,
   type ProjectType,
 } from "@/lib/project-packs";
 
@@ -20,55 +19,38 @@ const LABELS: Record<string, string> = {
 type Props = {
   projectType: ProjectType;
   birthDate?: string;
-  /** When true, travel declaration is required (admin flag). Always listed as optional otherwise. */
+  isMinorParticipant?: boolean;
   needsTravelDeclaration?: boolean;
 };
 
 export function DocumentsToSignPreview({
   projectType,
   birthDate = "",
-  needsTravelDeclaration = false,
+  isMinorParticipant,
 }: Props) {
   const items = useMemo(() => {
     const project = { type: projectType };
-    const student = {
-      birth_date: birthDate || "2000-01-01",
-      needs_travel_declaration: needsTravelDeclaration,
-    };
-    // Preview required using birth date when present; if empty, show adult base pack
-    const required = birthDate
-      ? requiredStudentTemplateIds(project, student)
-      : ["participants_agreement", "zero_tolerance"];
-    const all = Array.from(
-      new Set([
-        ...availableStudentTemplateIds(project),
-        ...required,
-        "travel_tickets_declaration",
-      ]),
-    );
+    const all = availableStudentTemplateIds(project);
     return all.map((id) => ({
       id,
       label: LABELS[id] || id,
-      required: required.includes(id),
     }));
-  }, [projectType, birthDate, needsTravelDeclaration]);
+  }, [projectType]);
 
   const minorNote =
-    birthDate && isMinor(birthDate)
-      ? "Because you are under 18, extra guardian/parent documents are included."
-      : birthDate
-        ? null
-        : "Enter your birth date to see if guardian documents apply.";
+    (isMinorParticipant ?? (birthDate ? isMinor(birthDate) : false))
+      ? "Because you are under 18, your parent or legal guardian must upload their ID and sign all documents after approval."
+      : null;
 
   return (
     <section className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--sky)]/30 px-4 py-4">
       <div>
         <h2 className="text-lg font-bold text-[var(--navy)]">
-          Documents you will sign
+          Documents you may be asked to sign
         </h2>
         <p className="mt-1 text-sm text-[var(--mint-text)]">
-          After you submit and we verify your uploaded ID, you will sign these
-          one by one (preview → draw signature → confirm).
+          After approval, organisers choose which documents you must sign and
+          send you a portal invite. Typical documents for this project:
         </p>
         {minorNote && (
           <p className="mt-1 text-xs text-[var(--muted)]">{minorNote}</p>
@@ -78,17 +60,12 @@ export function DocumentsToSignPreview({
         {items.map((item, i) => (
           <li
             key={item.id}
-            className="flex items-start gap-3 rounded-xl bg-white/80 px-3 py-2.5 text-sm"
+            className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--navy)] text-xs font-bold text-white">
-              {i + 1}
+            <span>
+              <span className="mr-2 text-[var(--muted)]">{i + 1}.</span>
+              {item.label}
             </span>
-            <div>
-              <div className="font-medium text-[var(--navy)]">{item.label}</div>
-              <div className="text-xs text-[var(--mint-text)]">
-                {item.required ? "Required" : "Optional / if applicable"}
-              </div>
-            </div>
           </li>
         ))}
       </ol>
